@@ -1,3 +1,6 @@
+# Prerequisites
+Make sure that you have [Node](https://nodejs.org/en/download/package-manager/current) installed in your computer
+
 # Installation
 Some necessary libraries to be installed
 
