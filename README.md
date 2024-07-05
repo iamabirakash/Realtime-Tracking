@@ -14,3 +14,6 @@ npm i socket.io
 ```bash
 node app.js/index.js
 ```
+# Note
+1. The devices must be connected to a same network.
+2. The location gets updated in every 2 secs.
