@@ -16,6 +16,75 @@ body {
     height: 100%;
 }
 
+#room-panel {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 1001;
+    display: flex;
+    max-width: calc(100% - 32px);
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+#room-form {
+    display: flex;
+    gap: 8px;
+}
+
+#room-code {
+    width: 170px;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #111827;
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+#room-form button,
+#copy-room-link {
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 6px;
+    background: #111827;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#room-form button:hover,
+#room-form button:focus,
+#copy-room-link:hover,
+#copy-room-link:focus {
+    background: #374151;
+    outline: none;
+}
+
+#room-form button:disabled,
+#room-form button:disabled:hover,
+#room-form button:disabled:focus {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+#copy-room-link {
+    width: 100%;
+    background: #047857;
+}
+
+#copy-room-link:hover,
+#copy-room-link:focus {
+    background: #065f46;
+}
+
 #status {
     position: fixed;
     top: 16px;
@@ -60,4 +129,28 @@ body {
 .route-button:focus {
     background: #1d4ed8;
     outline: none;
+}
+
+@media (max-width: 720px) {
+    #room-panel {
+        right: 16px;
+    }
+
+    #room-form {
+        flex-wrap: wrap;
+    }
+
+    #room-code {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    #room-form button {
+        flex: 1 1 0;
+    }
+
+    #status {
+        top: 16px;
+        max-width: calc(100% - 96px);
+    }
 }

@@ -1,5 +1,10 @@
 const socket = io();
 const statusElement = document.getElementById("status");
+const roomForm = document.getElementById("room-form");
+const roomCodeInput = document.getElementById("room-code");
+const joinRoomButton = document.getElementById("join-room");
+const createRoomButton = document.getElementById("create-room");
+const copyRoomLinkButton = document.getElementById("copy-room-link");
 
 function setStatus(message) {
     if (statusElement) {
@@ -16,6 +21,33 @@ function isValidCoordinate(latitude, longitude) {
         longitude >= -180 &&
         longitude <= 180
     );
+}
+
+function normalizeRoomCode(value) {
+    return String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_-]/g, "")
+        .slice(0, 32);
+}
+
+function isValidRoomCode(roomCode) {
+    return /^[A-Z0-9_-]{3,32}$/.test(roomCode);
+}
+
+function generateRoomCode() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const bytes = new Uint8Array(8);
+
+    if (window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(bytes);
+    } else {
+        for (let index = 0; index < bytes.length; index += 1) {
+            bytes[index] = Math.floor(Math.random() * 256);
+        }
+    }
+
+    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
 }
 
 function formatDistance(meters) {
@@ -55,10 +87,40 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 const markers = {};
 const userLocations = {};
 let currentLocation = null;
+let currentRoom = null;
+let pendingRoom = null;
+let joinTimeout = null;
 let selectedTargetId = null;
 let routeLayer = null;
 let routeUpdateTimer = null;
 let hasCenteredMap = false;
+let roomControlsBusy = false;
+
+function updateJoinButtonState() {
+    if (!joinRoomButton || !roomCodeInput) {
+        return;
+    }
+
+    const roomCode = normalizeRoomCode(roomCodeInput.value);
+    joinRoomButton.disabled = roomControlsBusy || !isValidRoomCode(roomCode);
+}
+
+function setRoomControlsBusy(isBusy) {
+    roomControlsBusy = isBusy;
+
+    if (createRoomButton) {
+        createRoomButton.disabled = isBusy;
+    }
+
+    updateJoinButtonState();
+}
+
+function clearJoinTimeout() {
+    if (joinTimeout) {
+        clearTimeout(joinTimeout);
+        joinTimeout = null;
+    }
+}
 
 function clearRoute() {
     selectedTargetId = null;
@@ -72,6 +134,128 @@ function clearRoute() {
         map.removeLayer(routeLayer);
         routeLayer = null;
     }
+}
+
+function clearMarkers() {
+    Object.keys(markers).forEach((id) => {
+        map.removeLayer(markers[id]);
+        delete markers[id];
+        delete userLocations[id];
+    });
+}
+
+function resetTrackingView() {
+    clearRoute();
+    clearMarkers();
+    hasCenteredMap = false;
+}
+
+function publishLocation() {
+    if (!currentRoom || !currentLocation) {
+        return;
+    }
+
+    socket.emit("send-location", currentLocation);
+}
+
+function setRoomUrl(roomCode) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", roomCode);
+    window.history.replaceState({}, "", url.toString());
+}
+
+function getInviteLink() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", currentRoom);
+    return url.toString();
+}
+
+async function copyInviteLink() {
+    if (!currentRoom) {
+        return;
+    }
+
+    const inviteLink = getInviteLink();
+
+    try {
+        await navigator.clipboard.writeText(inviteLink);
+        setStatus(`Invite link copied for room ${currentRoom}.`);
+    } catch (error) {
+        console.error(error);
+        window.prompt("Copy invite link", inviteLink);
+    }
+}
+
+function finishRoomJoin(roomCode) {
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+
+    if (!isValidRoomCode(normalizedRoomCode)) {
+        return;
+    }
+
+    const roomChanged = currentRoom !== normalizedRoomCode;
+
+    clearJoinTimeout();
+    pendingRoom = null;
+    currentRoom = normalizedRoomCode;
+    setRoomControlsBusy(false);
+
+    if (roomChanged) {
+        resetTrackingView();
+    }
+
+    if (roomCodeInput) {
+        roomCodeInput.value = currentRoom;
+    }
+
+    if (copyRoomLinkButton) {
+        copyRoomLinkButton.hidden = false;
+    }
+
+    setRoomUrl(currentRoom);
+    publishLocation();
+    setStatus(`Joined room ${currentRoom}. Sharing only with this room.`);
+}
+
+function failRoomJoin(message) {
+    clearJoinTimeout();
+    pendingRoom = null;
+    setRoomControlsBusy(false);
+    setStatus(message || "Could not join room.");
+}
+
+function joinRoom(roomCode) {
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+
+    if (!isValidRoomCode(normalizedRoomCode)) {
+        failRoomJoin("Enter a room code with 3-32 letters or numbers.");
+        return;
+    }
+
+    if (!socket.connected) {
+        failRoomJoin("Still connecting to the server. Try again in a moment.");
+        return;
+    }
+
+    pendingRoom = normalizedRoomCode;
+    setRoomControlsBusy(true);
+    setStatus(`Joining room ${normalizedRoomCode}...`);
+
+    clearJoinTimeout();
+    joinTimeout = setTimeout(() => {
+        if (pendingRoom === normalizedRoomCode) {
+            failRoomJoin("Room join timed out. Check the server and try again.");
+        }
+    }, 7000);
+
+    socket.emit("join-room", { roomCode: normalizedRoomCode }, (response = {}) => {
+        if (!response.ok) {
+            failRoomJoin(response.error || "Could not join room.");
+            return;
+        }
+
+        finishRoomJoin(response.roomCode);
+    });
 }
 
 function drawDirectPath(targetLocation) {
@@ -182,7 +366,7 @@ function bindMarkerPopup(id, marker) {
 
     const label = document.createElement("div");
     label.className = "marker-title";
-    label.textContent = id === socket.id ? "You" : "Tracked user";
+    label.textContent = id === socket.id ? "You" : "Room member";
     popupContent.appendChild(label);
 
     if (id !== socket.id) {
@@ -197,6 +381,38 @@ function bindMarkerPopup(id, marker) {
     marker.bindPopup(popupContent);
 }
 
+if (roomCodeInput) {
+    roomCodeInput.addEventListener("input", () => {
+        const normalizedRoomCode = normalizeRoomCode(roomCodeInput.value);
+
+        if (roomCodeInput.value !== normalizedRoomCode) {
+            roomCodeInput.value = normalizedRoomCode;
+        }
+
+        updateJoinButtonState();
+    });
+}
+
+if (roomForm) {
+    roomForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        joinRoom(roomCodeInput.value);
+    });
+}
+
+if (createRoomButton) {
+    createRoomButton.addEventListener("click", () => {
+        const roomCode = generateRoomCode();
+        roomCodeInput.value = roomCode;
+        updateJoinButtonState();
+        joinRoom(roomCode);
+    });
+}
+
+if (copyRoomLinkButton) {
+    copyRoomLinkButton.addEventListener("click", copyInviteLink);
+}
+
 if (navigator.geolocation) {
     navigator.geolocation.watchPosition(
         (position) => {
@@ -208,12 +424,17 @@ if (navigator.geolocation) {
             }
 
             currentLocation = { latitude, longitude };
-            socket.emit("send-location", { latitude, longitude });
 
-            if (selectedTargetId) {
-                scheduleRouteUpdate();
-            } else {
-                setStatus("Sharing your live location");
+            if (currentRoom) {
+                publishLocation();
+
+                if (selectedTargetId) {
+                    scheduleRouteUpdate();
+                } else {
+                    setStatus(`Sharing location in room ${currentRoom}.`);
+                }
+            } else if (!pendingRoom) {
+                setStatus("Create a room or enter a code to join.");
             }
         },
         (error) => {
@@ -229,6 +450,14 @@ if (navigator.geolocation) {
 } else {
     setStatus("Geolocation is not supported by this browser");
 }
+
+socket.on("room-joined", (data = {}) => {
+    finishRoomJoin(data.roomCode);
+});
+
+socket.on("room-error", (data = {}) => {
+    failRoomJoin(data.error || "Could not join room.");
+});
 
 socket.on("receive-location", (data) => {
     const { id, latitude, longitude } = data;
@@ -271,9 +500,33 @@ socket.on("user-disconnected", (id) => {
 });
 
 socket.on("connect", () => {
-    setStatus("Connected. Waiting for location...");
+    setRoomControlsBusy(false);
+
+    if (currentRoom) {
+        joinRoom(currentRoom);
+    } else {
+        setStatus("Connected. Create a room or enter a code to join.");
+    }
 });
 
 socket.on("disconnect", () => {
+    clearJoinTimeout();
+    pendingRoom = null;
+    setRoomControlsBusy(false);
     setStatus("Disconnected from tracking server");
 });
+
+const roomFromUrl = normalizeRoomCode(new URLSearchParams(window.location.search).get("room"));
+
+if (roomFromUrl) {
+    roomCodeInput.value = roomFromUrl;
+    updateJoinButtonState();
+
+    if (socket.connected) {
+        joinRoom(roomFromUrl);
+    } else {
+        socket.once("connect", () => joinRoom(roomFromUrl));
+    }
+} else {
+    updateJoinButtonState();
+}
