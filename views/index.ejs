@@ -12,14 +12,15 @@
 
     <section id="room-panel" aria-label="Location sharing room">
         <form id="room-form">
+            <input id="display-name" type="text" name="displayName" placeholder="Your name" maxlength="30" autocomplete="name" aria-label="Your name">
             <input id="room-code" type="text" name="roomCode" placeholder="Enter room code" maxlength="32" autocomplete="off" aria-label="Room code">
             <button id="join-room" type="submit" disabled>Join</button>
-            <button id="create-room" type="button">Create</button>
+            <button id="create-room" type="button" disabled>Create</button>
         </form>
         <button id="copy-room-link" type="button" hidden>Copy invite link</button>
     </section>
 
-    <div id="status" role="status">Create a room or enter a code to join.</div>
+    <div id="status" role="status">Enter your name, then create or join a room.</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet-src.min.js" integrity="sha512-3/WyQrhTdqSVmSifQS62akgtNBhZha2lS44TnoN9Jk3J01FvsKK4suVmz6t5FtccGb5iJw58GoFhBjPE5EPc8Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="/socket.io/socket.io.js"></script>

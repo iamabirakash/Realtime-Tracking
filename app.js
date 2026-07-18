@@ -17,8 +17,20 @@ function normalizeRoomCode(value) {
     return value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 32);
 }
 
+function normalizeDisplayName(value) {
+    if (typeof value !== "string") {
+        return "";
+    }
+
+    return value.trim().replace(/\s+/g, " ").slice(0, 30);
+}
+
 function isValidRoomCode(roomCode) {
     return /^[A-Z0-9_-]{3,32}$/.test(roomCode);
+}
+
+function isValidDisplayName(displayName) {
+    return displayName.length >= 2 && displayName.length <= 30;
 }
 
 function getRoomLocations(roomCode) {
@@ -60,12 +72,26 @@ app.use(express.static(path.join(__dirname, "public")));
 
 io.on("connection", function (socket) {
     let currentRoom = null;
+    let currentName = null;
 
     socket.on("join-room", function (data = {}, callback) {
         const roomCode = normalizeRoomCode(data.roomCode);
+        const displayName = normalizeDisplayName(data.displayName);
 
         if (!isValidRoomCode(roomCode)) {
             const response = { ok: false, error: "Room code must be 3-32 letters or numbers." };
+
+            socket.emit("room-error", response);
+
+            if (typeof callback === "function") {
+                callback(response);
+            }
+
+            return;
+        }
+
+        if (!isValidDisplayName(displayName)) {
+            const response = { ok: false, error: "Name must be 2-30 characters." };
 
             socket.emit("room-error", response);
 
@@ -82,9 +108,10 @@ io.on("connection", function (socket) {
         }
 
         currentRoom = roomCode;
+        currentName = displayName;
         socket.join(roomCode);
 
-        const response = { ok: true, roomCode };
+        const response = { ok: true, roomCode, displayName };
         socket.emit("room-joined", response);
         sendRoomLocations(socket, roomCode);
 
@@ -94,7 +121,7 @@ io.on("connection", function (socket) {
     });
 
     socket.on("send-location", function (data = {}) {
-        if (!currentRoom) {
+        if (!currentRoom || !currentName) {
             return;
         }
 
@@ -112,8 +139,10 @@ io.on("connection", function (socket) {
             return;
         }
 
-        getRoomLocations(currentRoom).set(socket.id, { latitude, longitude });
-        io.to(currentRoom).emit("receive-location", { id: socket.id, latitude, longitude });
+        const location = { latitude, longitude, name: currentName };
+
+        getRoomLocations(currentRoom).set(socket.id, location);
+        io.to(currentRoom).emit("receive-location", { id: socket.id, ...location });
     });
 
     socket.on("disconnect", function () {

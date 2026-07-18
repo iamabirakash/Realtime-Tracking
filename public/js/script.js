@@ -1,6 +1,7 @@
 const socket = io();
 const statusElement = document.getElementById("status");
 const roomForm = document.getElementById("room-form");
+const displayNameInput = document.getElementById("display-name");
 const roomCodeInput = document.getElementById("room-code");
 const joinRoomButton = document.getElementById("join-room");
 const createRoomButton = document.getElementById("create-room");
@@ -31,12 +32,20 @@ function normalizeRoomCode(value) {
         .slice(0, 32);
 }
 
+function normalizeDisplayName(value) {
+    return String(value || "").trim().replace(/\s+/g, " ").slice(0, 30);
+}
+
 function isValidRoomCode(roomCode) {
     return /^[A-Z0-9_-]{3,32}$/.test(roomCode);
 }
 
+function isValidDisplayName(displayName) {
+    return displayName.length >= 2 && displayName.length <= 30;
+}
+
 function generateRoomCode() {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ123456789";
     const bytes = new Uint8Array(8);
 
     if (window.crypto && window.crypto.getRandomValues) {
@@ -88,6 +97,7 @@ const markers = {};
 const userLocations = {};
 let currentLocation = null;
 let currentRoom = null;
+let currentDisplayName = null;
 let pendingRoom = null;
 let joinTimeout = null;
 let selectedTargetId = null;
@@ -97,21 +107,21 @@ let hasCenteredMap = false;
 let roomControlsBusy = false;
 
 function updateJoinButtonState() {
-    if (!joinRoomButton || !roomCodeInput) {
-        return;
+    const roomCode = normalizeRoomCode(roomCodeInput && roomCodeInput.value);
+    const displayName = normalizeDisplayName(displayNameInput && displayNameInput.value);
+    const canUseName = isValidDisplayName(displayName);
+
+    if (joinRoomButton) {
+        joinRoomButton.disabled = roomControlsBusy || !canUseName || !isValidRoomCode(roomCode);
     }
 
-    const roomCode = normalizeRoomCode(roomCodeInput.value);
-    joinRoomButton.disabled = roomControlsBusy || !isValidRoomCode(roomCode);
+    if (createRoomButton) {
+        createRoomButton.disabled = roomControlsBusy || !canUseName;
+    }
 }
 
 function setRoomControlsBusy(isBusy) {
     roomControlsBusy = isBusy;
-
-    if (createRoomButton) {
-        createRoomButton.disabled = isBusy;
-    }
-
     updateJoinButtonState();
 }
 
@@ -186,10 +196,32 @@ async function copyInviteLink() {
     }
 }
 
-function finishRoomJoin(roomCode) {
-    const normalizedRoomCode = normalizeRoomCode(roomCode);
+function getMarkerName(id) {
+    if (id === socket.id && currentDisplayName) {
+        return currentDisplayName;
+    }
 
-    if (!isValidRoomCode(normalizedRoomCode)) {
+    return (userLocations[id] && userLocations[id].name) || "Room member";
+}
+
+function updateMarkerIdentity(id, marker) {
+    const markerName = getMarkerName(id);
+    const tooltipText = id === socket.id ? `You: ${markerName}` : markerName;
+
+    if (marker.getTooltip()) {
+        marker.setTooltipContent(tooltipText);
+    } else {
+        marker.bindTooltip(tooltipText, { direction: "top" });
+    }
+
+    bindMarkerPopup(id, marker);
+}
+
+function finishRoomJoin(roomCode, displayName) {
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+    const normalizedDisplayName = normalizeDisplayName(displayName || displayNameInput.value);
+
+    if (!isValidRoomCode(normalizedRoomCode) || !isValidDisplayName(normalizedDisplayName)) {
         return;
     }
 
@@ -198,6 +230,7 @@ function finishRoomJoin(roomCode) {
     clearJoinTimeout();
     pendingRoom = null;
     currentRoom = normalizedRoomCode;
+    currentDisplayName = normalizedDisplayName;
     setRoomControlsBusy(false);
 
     if (roomChanged) {
@@ -208,13 +241,18 @@ function finishRoomJoin(roomCode) {
         roomCodeInput.value = currentRoom;
     }
 
+    if (displayNameInput) {
+        displayNameInput.value = currentDisplayName;
+        localStorage.setItem("device-tracking-name", currentDisplayName);
+    }
+
     if (copyRoomLinkButton) {
         copyRoomLinkButton.hidden = false;
     }
 
     setRoomUrl(currentRoom);
     publishLocation();
-    setStatus(`Joined room ${currentRoom}. Sharing only with this room.`);
+    setStatus(`${currentDisplayName} joined room ${currentRoom}.`);
 }
 
 function failRoomJoin(message) {
@@ -226,6 +264,12 @@ function failRoomJoin(message) {
 
 function joinRoom(roomCode) {
     const normalizedRoomCode = normalizeRoomCode(roomCode);
+    const normalizedDisplayName = normalizeDisplayName(displayNameInput && displayNameInput.value);
+
+    if (!isValidDisplayName(normalizedDisplayName)) {
+        failRoomJoin("Enter your name with 2-30 characters.");
+        return;
+    }
 
     if (!isValidRoomCode(normalizedRoomCode)) {
         failRoomJoin("Enter a room code with 3-32 letters or numbers.");
@@ -248,14 +292,18 @@ function joinRoom(roomCode) {
         }
     }, 7000);
 
-    socket.emit("join-room", { roomCode: normalizedRoomCode }, (response = {}) => {
-        if (!response.ok) {
-            failRoomJoin(response.error || "Could not join room.");
-            return;
-        }
+    socket.emit(
+        "join-room",
+        { roomCode: normalizedRoomCode, displayName: normalizedDisplayName },
+        (response = {}) => {
+            if (!response.ok) {
+                failRoomJoin(response.error || "Could not join room.");
+                return;
+            }
 
-        finishRoomJoin(response.roomCode);
-    });
+            finishRoomJoin(response.roomCode, response.displayName);
+        }
+    );
 }
 
 function drawDirectPath(targetLocation) {
@@ -366,7 +414,7 @@ function bindMarkerPopup(id, marker) {
 
     const label = document.createElement("div");
     label.className = "marker-title";
-    label.textContent = id === socket.id ? "You" : "Room member";
+    label.textContent = id === socket.id ? `You (${getMarkerName(id)})` : getMarkerName(id);
     popupContent.appendChild(label);
 
     if (id !== socket.id) {
@@ -379,6 +427,19 @@ function bindMarkerPopup(id, marker) {
     }
 
     marker.bindPopup(popupContent);
+}
+
+if (displayNameInput) {
+    displayNameInput.value = localStorage.getItem("device-tracking-name") || "";
+    displayNameInput.addEventListener("input", () => {
+        const normalizedDisplayName = normalizeDisplayName(displayNameInput.value);
+
+        if (displayNameInput.value.length > 30) {
+            displayNameInput.value = normalizedDisplayName;
+        }
+
+        updateJoinButtonState();
+    });
 }
 
 if (roomCodeInput) {
@@ -434,7 +495,7 @@ if (navigator.geolocation) {
                     setStatus(`Sharing location in room ${currentRoom}.`);
                 }
             } else if (!pendingRoom) {
-                setStatus("Create a room or enter a code to join.");
+                setStatus("Enter your name, then create or join a room.");
             }
         },
         (error) => {
@@ -452,7 +513,7 @@ if (navigator.geolocation) {
 }
 
 socket.on("room-joined", (data = {}) => {
-    finishRoomJoin(data.roomCode);
+    finishRoomJoin(data.roomCode, data.displayName);
 });
 
 socket.on("room-error", (data = {}) => {
@@ -461,12 +522,13 @@ socket.on("room-error", (data = {}) => {
 
 socket.on("receive-location", (data) => {
     const { id, latitude, longitude } = data;
+    const name = normalizeDisplayName(data.name) || "Room member";
 
     if (!isValidCoordinate(latitude, longitude)) {
         return;
     }
 
-    userLocations[id] = { latitude, longitude };
+    userLocations[id] = { latitude, longitude, name };
 
     if (!hasCenteredMap && id === socket.id) {
         map.setView([latitude, longitude], 16);
@@ -475,9 +537,10 @@ socket.on("receive-location", (data) => {
 
     if (markers[id]) {
         markers[id].setLatLng([latitude, longitude]);
+        updateMarkerIdentity(id, markers[id]);
     } else {
         markers[id] = L.marker([latitude, longitude]).addTo(map);
-        bindMarkerPopup(id, markers[id]);
+        updateMarkerIdentity(id, markers[id]);
     }
 
     if (id === selectedTargetId || id === socket.id) {
@@ -505,7 +568,7 @@ socket.on("connect", () => {
     if (currentRoom) {
         joinRoom(currentRoom);
     } else {
-        setStatus("Connected. Create a room or enter a code to join.");
+        setStatus("Connected. Enter your name, then create or join a room.");
     }
 });
 
@@ -522,10 +585,14 @@ if (roomFromUrl) {
     roomCodeInput.value = roomFromUrl;
     updateJoinButtonState();
 
-    if (socket.connected) {
-        joinRoom(roomFromUrl);
+    if (isValidDisplayName(normalizeDisplayName(displayNameInput.value))) {
+        if (socket.connected) {
+            joinRoom(roomFromUrl);
+        } else {
+            socket.once("connect", () => joinRoom(roomFromUrl));
+        }
     } else {
-        socket.once("connect", () => joinRoom(roomFromUrl));
+        setStatus(`Enter your name to join room ${roomFromUrl}.`);
     }
 } else {
     updateJoinButtonState();
