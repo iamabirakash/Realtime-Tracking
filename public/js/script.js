@@ -1,5 +1,6 @@
 const socket = io();
 const statusElement = document.getElementById("status");
+const statusText = document.querySelector("#status .status-text");
 const roomForm = document.getElementById("room-form");
 const displayNameInput = document.getElementById("display-name");
 const roomCodeInput = document.getElementById("room-code");
@@ -8,7 +9,9 @@ const createRoomButton = document.getElementById("create-room");
 const copyRoomLinkButton = document.getElementById("copy-room-link");
 
 function setStatus(message) {
-    if (statusElement) {
+    if (statusText) {
+        statusText.textContent = message;
+    } else if (statusElement) {
         statusElement.textContent = message;
     }
 }
@@ -158,6 +161,7 @@ function clearMarkers() {
 function resetTrackingView() {
     clearRoute();
     clearMarkers();
+    updateUserList();
     hasCenteredMap = false;
 }
 
@@ -203,6 +207,40 @@ function getMarkerName(id) {
     }
 
     return (userLocations[id] && userLocations[id].name) || "Room member";
+}
+
+/* ===== Sidebar: update the list of room members ===== */
+function updateUserList() {
+    const userList = document.getElementById("user-list");
+    if (!userList) return;
+
+    userList.innerHTML = "";
+
+    Object.keys(userLocations).forEach((id) => {
+        const li = document.createElement("li");
+        li.className = "user-item";
+        li.dataset.id = id;
+
+        const name = getMarkerName(id);
+        const isMe = id === socket.id;
+
+        // Status dot
+        const dot = document.createElement("span");
+        dot.className = "user-dot" + (isMe ? " user-dot--me" : "");
+
+        // Name text
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = isMe ? `${name} (you)` : name;
+
+        li.appendChild(dot);
+        li.appendChild(nameSpan);
+
+        if (isMe) {
+            li.classList.add("user-item--me");
+        }
+
+        userList.appendChild(li);
+    });
 }
 
 function updateMarkerIdentity(id, marker) {
@@ -253,6 +291,7 @@ function finishRoomJoin(roomCode, displayName) {
 
     setRoomUrl(currentRoom);
     publishLocation();
+    updateUserList();
     setStatus(`${currentDisplayName} joined room ${currentRoom}.`);
 }
 
@@ -560,6 +599,8 @@ socket.on("receive-location", (data) => {
         updateMarkerIdentity(id, markers[id]);
     }
 
+    updateUserList();
+
     if (id === selectedTargetId || id === socket.id) {
         scheduleRouteUpdate();
     }
@@ -572,6 +613,8 @@ socket.on("user-disconnected", (id) => {
         map.removeLayer(markers[id]);
         delete markers[id];
     }
+
+    updateUserList();
 
     if (id === selectedTargetId) {
         clearRoute();
