@@ -107,12 +107,13 @@ let hasCenteredMap = false;
 let roomControlsBusy = false;
 
 function updateJoinButtonState() {
-    const roomCode = normalizeRoomCode(roomCodeInput && roomCodeInput.value);
     const displayName = normalizeDisplayName(displayNameInput && displayNameInput.value);
     const canUseName = isValidDisplayName(displayName);
 
+    /* Join button is enabled as long as the name is valid –
+       the room code can be empty (server will generate one) */
     if (joinRoomButton) {
-        joinRoomButton.disabled = roomControlsBusy || !canUseName || !isValidRoomCode(roomCode);
+        joinRoomButton.disabled = roomControlsBusy || !canUseName;
     }
 
     if (createRoomButton) {
@@ -271,11 +272,8 @@ function joinRoom(roomCode) {
         return;
     }
 
-    if (!isValidRoomCode(normalizedRoomCode)) {
-        failRoomJoin("Enter a room code with 3-32 letters or numbers.");
-        return;
-    }
-
+    /* Room code validation is handled by the server –
+       if the client sends an empty/invalid code, the server generates one */
     if (!socket.connected) {
         failRoomJoin("Still connecting to the server. Try again in a moment.");
         return;
@@ -283,7 +281,7 @@ function joinRoom(roomCode) {
 
     pendingRoom = normalizedRoomCode;
     setRoomControlsBusy(true);
-    setStatus(`Joining room ${normalizedRoomCode}...`);
+    setStatus(normalizedRoomCode ? `Joining room ${normalizedRoomCode}...` : "Creating a new room...");
 
     clearJoinTimeout();
     joinTimeout = setTimeout(() => {
@@ -454,15 +452,34 @@ if (roomCodeInput) {
     });
 }
 
+let createButtonSuppressed = false;
+
 if (roomForm) {
     roomForm.addEventListener("submit", (event) => {
         event.preventDefault();
+        createButtonSuppressed = true;
         joinRoom(roomCodeInput.value);
+        setTimeout(() => { createButtonSuppressed = false; }, 100);
+    });
+
+    /* Catch Enter key directly – prevents browsers from firing
+       the createRoomButton click when the Join button is disabled */
+    roomForm.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            createButtonSuppressed = true;
+            joinRoom(roomCodeInput.value);
+            setTimeout(() => { createButtonSuppressed = false; }, 100);
+        }
     });
 }
 
 if (createRoomButton) {
     createRoomButton.addEventListener("click", () => {
+        /* Prevent the Create button from firing when the user pressed Enter
+           in the form – some browsers trigger type="button" on Enter */
+        if (createButtonSuppressed) return;
+
         const roomCode = generateRoomCode();
         roomCodeInput.value = roomCode;
         updateJoinButtonState();

@@ -33,6 +33,15 @@ function isValidDisplayName(displayName) {
     return displayName.length >= 2 && displayName.length <= 30;
 }
 
+function generateRoomCode() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ123456789";
+    const bytes = new Array(8);
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = Math.floor(Math.random() * alphabet.length);
+    }
+    return bytes.map((i) => alphabet[i]).join("");
+}
+
 function getRoomLocations(roomCode) {
     if (!roomLocations.has(roomCode)) {
         roomLocations.set(roomCode, new Map());
@@ -75,20 +84,7 @@ io.on("connection", function (socket) {
     let currentName = null;
 
     socket.on("join-room", function (data = {}, callback) {
-        const roomCode = normalizeRoomCode(data.roomCode);
         const displayName = normalizeDisplayName(data.displayName);
-
-        if (!isValidRoomCode(roomCode)) {
-            const response = { ok: false, error: "Room code must be 3-32 letters or numbers." };
-
-            socket.emit("room-error", response);
-
-            if (typeof callback === "function") {
-                callback(response);
-            }
-
-            return;
-        }
 
         if (!isValidDisplayName(displayName)) {
             const response = { ok: false, error: "Name must be 2-30 characters." };
@@ -100,6 +96,13 @@ io.on("connection", function (socket) {
             }
 
             return;
+        }
+
+        let roomCode = normalizeRoomCode(data.roomCode);
+
+        /* If the client didn't supply a valid room code, generate one on the server */
+        if (!isValidRoomCode(roomCode)) {
+            roomCode = generateRoomCode();
         }
 
         if (currentRoom && currentRoom !== roomCode) {
