@@ -90,11 +90,15 @@ function formatDuration(seconds) {
     return `${minutes} min`;
 }
 
-const map = L.map("map").setView([0, 0], 2);
+const map = L.map("map", {
+    zoomControl: false
+}).setView([0, 0], 2);
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
 }).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
 
 const markers = {};
 const userLocations = {};
@@ -519,7 +523,14 @@ if (createRoomButton) {
            in the form – some browsers trigger type="button" on Enter */
         if (createButtonSuppressed) return;
 
-        const roomCode = generateRoomCode();
+        const inputValue = roomCodeInput?.value ?? '';
+        const normalized = normalizeRoomCode(inputValue);
+        let roomCode;
+        if (isValidRoomCode(normalized)) {
+            roomCode = normalized;
+        } else {
+            roomCode = generateRoomCode();
+        }
         roomCodeInput.value = roomCode;
         updateJoinButtonState();
         joinRoom(roomCode);

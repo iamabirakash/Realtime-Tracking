@@ -20,7 +20,7 @@ body {
 /* ===== Floating sidebar: room members ===== */
 #user-sidebar {
     position: fixed;
-    top: 16px;
+    top: 10px;
     left: 16px;
     z-index: 1000;
     width: 200px;
