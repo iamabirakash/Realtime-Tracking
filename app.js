@@ -148,6 +148,24 @@ io.on("connection", function (socket) {
         io.to(currentRoom).emit("receive-location", { id: socket.id, ...location });
     });
 
+    socket.on("chat-message", function (data = {}) {
+        if (!currentRoom || !currentName) {
+            return;
+        }
+
+        const message = data.message.trim();
+        if (!message) {
+            return;
+        }
+
+        // Broadcast the message to everyone in the room, including the sender
+        io.to(currentRoom).emit("chat-message", {
+            id: socket.id,
+            message: message,
+            name: currentName
+        });
+    });
+
     socket.on("disconnect", function () {
         removeSocketFromRoom(socket, currentRoom);
     });

@@ -167,6 +167,10 @@ function resetTrackingView() {
     clearMarkers();
     updateUserList();
     hasCenteredMap = false;
+    // Clear chat messages when leaving room
+    if (chatMessages) {
+        chatMessages.innerHTML = "";
+    }
 }
 
 function publishLocation() {
@@ -496,6 +500,9 @@ if (roomCodeInput) {
 }
 
 let createButtonSuppressed = false;
+let chatInput = null;
+let chatForm = null;
+let chatMessages = null;
 
 if (roomForm) {
     roomForm.addEventListener("submit", (event) => {
@@ -537,8 +544,40 @@ if (createRoomButton) {
     });
 }
 
+// Initialize chat elements
+chatInput = document.getElementById("chat-input");
+chatForm = document.getElementById("chat-form");
+chatMessages = document.getElementById("chat-messages");
+
+if (chatForm && chatInput) {
+    chatForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const message = chatInput.value.trim();
+        if (message && currentRoom) {
+            socket.emit("chat-message", { message });
+            chatInput.value = "";
+        }
+    });
+}
+
 if (copyRoomLinkButton) {
     copyRoomLinkButton.addEventListener("click", copyInviteLink);
+}
+
+// Initialize chat elements
+chatInput = document.getElementById("chat-input");
+chatForm = document.getElementById("chat-form");
+chatMessages = document.getElementById("chat-messages");
+
+if (chatForm && chatInput) {
+    chatForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const message = chatInput.value.trim();
+        if (message) {
+            socket.emit("chat-message", { message });
+            chatInput.value = "";
+        }
+    });
 }
 
 if (navigator.geolocation) {
@@ -631,6 +670,25 @@ socket.on("user-disconnected", (id) => {
         clearRoute();
         setStatus("Selected user disconnected.");
     }
+});
+
+socket.on("chat-message", (data) => {
+    const messageElement = document.createElement("div");
+    messageElement.style.marginBottom = "5px";
+
+    const senderName = document.createElement("strong");
+    senderName.textContent = data.name + ": ";
+    senderName.style.color = "#2563eb";
+
+    const messageText = document.createElement("span");
+    messageText.textContent = data.message;
+
+    messageElement.appendChild(senderName);
+    messageElement.appendChild(messageText);
+
+    chatMessages.appendChild(messageElement);
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
 socket.on("connect", () => {

@@ -13,12 +13,21 @@
 </head>
 <body>
 
-    <!-- Floating sidebar: room members -->
-    <aside id="user-sidebar" aria-label="Room members">
+    <!-- Floating sidebar: room members and chat -->
+    <aside id="user-sidebar" aria-label="Room members and chat">
         <div class="sidebar-header">
             <h3>Room members</h3>
         </div>
         <ul id="user-list"></ul>
+
+        <!-- Chat container -->
+        <div id="chat-container">
+            <div id="chat-messages"></div>
+            <form id="chat-form">
+                <input id="chat-input" type="text" placeholder="Type a message...">
+                <button id="chat-send" type="submit">Send</button>
+            </form>
+        </div>
     </aside>
 
     <!-- Full-screen map -->
