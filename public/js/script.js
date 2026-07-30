@@ -654,65 +654,31 @@ socket.on("user-disconnected", (id) => {
 
 socket.on("chat-message", (data) => {
     const messageElement = document.createElement("div");
-    messageElement.style.marginBottom = "12px";
-    messageElement.style.display = "flex";
-    messageElement.style.flexDirection = "column";
+    messageElement.classList.add("chat-message");
 
-    // Check if this message is from the current user
+    // Determine if this message is from the current user
     const isOwnMessage = data.id === socket.id;
 
     if (isOwnMessage) {
-        // Style for sent messages (right-aligned)
-        messageElement.style.alignSelf = "flex-end";
-
-        const messageWrapper = document.createElement("div");
-        messageWrapper.style.background = "#2563eb";
-        messageWrapper.style.color = "white";
-        messageWrapper.style.padding = "10px 14px";
-        messageWrapper.style.borderRadius = "18px 18px 4px 18px";
-        messageWrapper.style.maxWidth = "80%";
-        messageWrapper.style.wordWrap = "break-word";
-
-        const messageText = document.createElement("span");
-        messageText.textContent = data.message;
-        messageText.style.fontSize = "13px";
-        messageText.style.lineHeight = "1.4";
-
-        messageWrapper.appendChild(messageText);
-        messageElement.appendChild(messageWrapper);
+        messageElement.classList.add("own");
     } else {
-        // Style for received messages (left-aligned)
-        messageElement.style.alignSelf = "flex-start";
-
-        const messageWrapper = document.createElement("div");
-        messageWrapper.style.display = "flex";
-        messageWrapper.style.alignItems = "center";
-        messageWrapper.style.gap = "8px";
-
-        const senderName = document.createElement("span");
-        senderName.textContent = data.name;
-        senderName.style.fontWeight = "600";
-        senderName.style.fontSize = "12px";
-        senderName.style.color = "#94a3b8";
-
-        const messageBackground = document.createElement("div");
-        messageBackground.style.background = "rgba(30, 64, 175, 0.15)";
-        messageBackground.style.border = "1px solid rgba(30, 64, 175, 0.2)";
-        messageBackground.style.borderRadius = "18px 18px 18px 4px";
-        messageBackground.style.padding = "10px 14px";
-        messageBackground.style.maxWidth = "80%";
-
-        const messageText = document.createElement("span");
-        messageText.textContent = data.message;
-        messageText.style.fontSize = "13px";
-        messageText.style.lineHeight = "1.4";
-        messageText.style.color = "#1e293b";
-
-        messageBackground.appendChild(messageText);
-        messageWrapper.appendChild(senderName);
-        messageWrapper.appendChild(messageBackground);
-        messageElement.appendChild(messageWrapper);
+        messageElement.classList.add("other");
     }
+
+    // Add sender name for other users' messages
+    if (!isOwnMessage) {
+        const senderName = document.createElement("div");
+        senderName.classList.add("chat-sender-name");
+        senderName.textContent = data.name;
+        messageElement.appendChild(senderName);
+    }
+
+    // Create message bubble
+    const messageBubble = document.createElement("div");
+    messageBubble.classList.add("chat-message-bubble");
+    messageBubble.textContent = data.message;
+
+    messageElement.appendChild(messageBubble);
 
     chatMessages.appendChild(messageElement);
     // Scroll to bottom
