@@ -101,6 +101,12 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 L.control.zoom({ position: 'topright' }).addTo(map);
 
 const markers = {};
+const markerClusterGroup = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    zoomToBoundsOnClick: true,
+    maxClusterRadius: 45,
+}).addTo(map);
 const userLocations = {};
 let currentLocation = null;
 let currentRoom = null;
@@ -156,7 +162,7 @@ function clearRoute() {
 
 function clearMarkers() {
     Object.keys(markers).forEach((id) => {
-        map.removeLayer(markers[id]);
+        markerClusterGroup.removeLayer(markers[id]);
         delete markers[id];
         delete userLocations[id];
     });
@@ -623,9 +629,11 @@ socket.on("receive-location", (data) => {
 
     if (markers[id]) {
         markers[id].setLatLng([latitude, longitude]);
+        markerClusterGroup.refreshClusters(markers[id]);
         updateMarkerIdentity(id, markers[id]);
     } else {
-        markers[id] = L.marker([latitude, longitude]).addTo(map);
+        markers[id] = L.marker([latitude, longitude]);
+        markerClusterGroup.addLayer(markers[id]);
         updateMarkerIdentity(id, markers[id]);
     }
 
@@ -640,7 +648,7 @@ socket.on("user-disconnected", (id) => {
     delete userLocations[id];
 
     if (markers[id]) {
-        map.removeLayer(markers[id]);
+        markerClusterGroup.removeLayer(markers[id]);
         delete markers[id];
     }
 
