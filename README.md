@@ -20,7 +20,8 @@ Highlights
 
 Screenshots
 
-(Replace these with actual screenshots or GIFs.)
+<img width="1920" height="899" alt="image" src="https://github.com/user-attachments/assets/11350cd1-ddb4-4d8e-b4de-16d4db54ce35" />
+
 
 - Map with clustered members and sidebar
 - Landmark popup with route actions
