@@ -40,3 +40,5 @@ The app runs on port `3000` by default. Set the `PORT` environment variable to u
 - Room and location state is stored in memory and is lost when the server restarts.
 - Landmark creation returns a server acknowledgement so invalid or failed pins show an error in the status bar.
 - Every shared landmark includes a Route here action so all room members can navigate to it.
+- Landmark routing offers compact Car, Walk, and Cycle choices.
+- Landmark popups show a creator-only Remove pin control; other users see it disabled.

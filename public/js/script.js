@@ -301,23 +301,47 @@ function addLandmarkMarker(landmark) {
     creator.textContent = `Added by ${landmark.creatorName || "room member"}`;
     popupContent.appendChild(creator);
 
+    const modeSelect = document.createElement("select");
+    modeSelect.className = "landmark-route-mode";
+    modeSelect.setAttribute("aria-label", "Travel mode");
+    [
+        ["driving", "Car"],
+        ["walking", "Walk"],
+        ["cycling", "Cycle"],
+    ].forEach(([value, labelText]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = labelText;
+        option.selected = value === selectedRouteMode;
+        modeSelect.appendChild(option);
+    });
+    modeSelect.addEventListener("change", () => {
+        selectedRouteMode = modeSelect.value;
+    });
+    popupContent.appendChild(modeSelect);
+
     const routeButton = document.createElement("button");
     routeButton.type = "button";
     routeButton.className = "route-button";
     routeButton.textContent = "Route here";
-    routeButton.addEventListener("click", () => routeToLandmark(landmark.id));
+    routeButton.addEventListener("click", () => routeToLandmark(landmark.id, modeSelect.value));
     popupContent.appendChild(routeButton);
 
-    if (landmark.creatorId === socket.id) {
-        const removeButton = document.createElement("button");
-        removeButton.type = "button";
-        removeButton.className = "landmark-remove-button";
-        removeButton.textContent = "Remove pin";
+    const removeButton = document.createElement("button");
+    const isCreator = landmark.creatorId === socket.id;
+    removeButton.type = "button";
+    removeButton.className = "landmark-remove-button";
+    removeButton.textContent = isCreator ? "Remove pin" : "Only creator can remove";
+    removeButton.disabled = !isCreator;
+    removeButton.title = isCreator ? "Remove this shared pin" : "Only the pin creator can remove it";
+    if (isCreator) {
         removeButton.addEventListener("click", () => {
             socket.emit("remove-landmark", { id: landmark.id });
         });
-        popupContent.appendChild(removeButton);
+    } else {
+        removeButton.classList.add("landmark-remove-button--disabled");
     }
+    popupContent.appendChild(removeButton);
 
     marker.bindPopup(popupContent);
     landmarkMarkers[landmark.id] = marker;
