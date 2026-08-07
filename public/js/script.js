@@ -323,8 +323,17 @@ function addLandmarkMarker(landmark) {
     const routeButton = document.createElement("button");
     routeButton.type = "button";
     routeButton.className = "route-button";
-    routeButton.textContent = "Route here";
-    routeButton.addEventListener("click", () => routeToLandmark(landmark.id, modeSelect.value));
+    routeButton.textContent = selectedLandmarkId === landmark.id ? "Hide route" : "Route here";
+    routeButton.addEventListener("click", () => {
+        if (selectedLandmarkId === landmark.id) {
+            clearRoute();
+            routeButton.textContent = "Route here";
+            setStatus("Route cleared.");
+            return;
+        }
+        routeToLandmark(landmark.id, modeSelect.value);
+        routeButton.textContent = "Hide route";
+    });
     popupContent.appendChild(routeButton);
 
     const removeButton = document.createElement("button");
@@ -696,8 +705,17 @@ function bindMarkerPopup(id, marker) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "route-button";
-        button.textContent = "Show route";
-        button.addEventListener("click", () => routeToUser(id, modeSelect.value));
+        button.textContent = selectedTargetId === id ? "Hide route" : "Show route";
+        button.addEventListener("click", () => {
+            if (selectedTargetId === id) {
+                clearRoute();
+                button.textContent = "Show route";
+                setStatus("Route cleared.");
+                return;
+            }
+            routeToUser(id, modeSelect.value);
+            button.textContent = "Hide route";
+        });
         popupContent.appendChild(button);
     }
 
@@ -772,6 +790,10 @@ if (createRoomButton) {
         updateJoinButtonState();
         joinRoom(roomCode);
     });
+}
+
+if (copyRoomLinkButton) {
+    copyRoomLinkButton.addEventListener("click", copyInviteLink);
 }
 
 // Initialize chat elements

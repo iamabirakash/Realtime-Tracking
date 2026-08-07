@@ -109,3 +109,4 @@ License
 Contact
 - Maintainer: @iamabirakash
 - Issues: https://github.com/iamabirakash/Realtime-Tracking/issues
+- Show route and Route here actions toggle to Hide route so an active route can be cancelled without refreshing.

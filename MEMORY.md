@@ -29,3 +29,4 @@
 - `public/css/style.css`: popup, landmark, mobile control, and collapsible panel styling.
 - `views/index.ejs`: Leaflet cluster assets and static chat header.
 - `README.md`, `CLAUDE.md`: feature and architecture documentation.
+- Made Show route and Route here toggle to Hide route, allowing route traces to be cancelled without a page refresh.
