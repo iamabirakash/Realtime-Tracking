@@ -1,19 +1,39 @@
-# Prerequisites
-Make sure that you have [Node](https://nodejs.org/en/download/package-manager/current) installed in your computer
+# Device Tracking
 
-# Installation
-Some necessary libraries to be installed
+A real-time location-sharing web app. Users join a room and share their live device locations with other room members.
+
+## Features
+
+- Live room-based device location sharing with named members.
+- Professional Leaflet pin markers for room members.
+- Marker clustering for nearby devices.
+- Click a member in the sidebar to center the map and open their marker.
+- Map styles: Standard, Satellite, Terrain, and Dark.
+- Map actions: Locate me and Fit all users.
+- Route options to another member for driving, walking, or cycling.
+- Room invite links and real-time room chat.
+
+## Prerequisites
+
+Install [Node.js](https://nodejs.org/en/download/package-manager/current).
+
+## Installation
 
 ```bash
-npm i express
-npm i ejs
-npm i socket.io
+npm install
 ```
-# Running the Server
+
+## Running the server
 
 ```bash
-node app.js/index.js
+npm start
 ```
-# Note
-1. The devices must be connected to a same network.
-2. The location gets updated in every 2 secs.
+
+The app runs on port `3000` by default. Set the `PORT` environment variable to use another port.
+
+## Notes
+
+- Devices should be connected to the same network when using a local server.
+- Location updates are sent whenever the browser geolocation watcher reports a change.
+- Map tiles and routing use public OpenStreetMap ecosystem services; availability and rate limits may vary.
+- Room and location state is stored in memory and is lost when the server restarts.

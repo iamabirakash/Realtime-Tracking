@@ -117,6 +117,58 @@ const baseLayers = {
 baseLayers.Standard.addTo(map);
 L.control.layers(baseLayers, null, { position: "topright", collapsed: true }).addTo(map);
 L.control.zoom({ position: "topright" }).addTo(map);
+function locateMe() {
+    if (!currentLocation) {
+        setStatus("Waiting for your location...");
+        return;
+    }
+
+    map.setView([currentLocation.latitude, currentLocation.longitude], Math.max(map.getZoom(), 16));
+    if (markers[socket.id]) {
+        markers[socket.id].openPopup();
+    }
+    setStatus("Centered on your location.");
+}
+
+function fitAllUsers() {
+    const locations = Object.values(userLocations)
+        .filter((location) => isValidCoordinate(location.latitude, location.longitude))
+        .map((location) => [location.latitude, location.longitude]);
+
+    if (locations.length === 0) {
+        setStatus("No shared locations are available yet.");
+        return;
+    }
+
+    if (locations.length === 1) {
+        map.setView(locations[0], Math.max(map.getZoom(), 16));
+    } else {
+        map.fitBounds(L.latLngBounds(locations), { padding: [60, 60], maxZoom: 16 });
+    }
+    setStatus(`Showing ${locations.length} room member${locations.length === 1 ? "" : "s"}.`);
+}
+
+const mapActions = L.control({ position: "topright" });
+mapActions.onAdd = () => {
+    const container = L.DomUtil.create("div", "leaflet-control map-actions");
+    const locateButton = L.DomUtil.create("button", "map-action-button", container);
+    locateButton.type = "button";
+    locateButton.title = "Center on my location";
+    locateButton.setAttribute("aria-label", "Center on my location");
+    locateButton.textContent = "Locate me";
+    locateButton.addEventListener("click", locateMe);
+
+    const fitButton = L.DomUtil.create("button", "map-action-button", container);
+    fitButton.type = "button";
+    fitButton.title = "Show all room members";
+    fitButton.setAttribute("aria-label", "Show all room members");
+    fitButton.textContent = "Fit all";
+    fitButton.addEventListener("click", fitAllUsers);
+
+    L.DomEvent.disableClickPropagation(container);
+    return container;
+};
+mapActions.addTo(map);
 
 const markers = {};
 const markerClusterGroup = L.markerClusterGroup({
@@ -264,6 +316,13 @@ function updateUserList() {
         // Name text
         const nameSpan = document.createElement("span");
         nameSpan.textContent = isMe ? `${name} (you)` : name;
+
+        li.addEventListener("click", () => {
+            const location = userLocations[id];
+            if (!location) return;
+            map.setView([location.latitude, location.longitude], Math.max(map.getZoom(), 16));
+            if (markers[id]) markers[id].openPopup();
+        });
 
         li.appendChild(dot);
         li.appendChild(nameSpan);
