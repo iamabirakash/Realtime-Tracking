@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Time Tracking</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+          integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+</head>
+<body>
+
+    <!-- Floating sidebar: room members -->
+    <aside id="user-sidebar" aria-label="Room members">
+        <div class="sidebar-header">
+            <h3>Room members</h3>
+        </div>
+        <ul id="user-list"></ul>
+    </aside>
+
+    <!-- Chat container (positioned at bottom-right) -->
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <form id="chat-form">
+            <input id="chat-input" type="text" placeholder="Type a message...">
+            <button id="chat-send" type="submit">Send</button>
+        </form>
+    </div>
+
+    <!-- Full-screen map -->
+    <div id="map"></div>
+
+    <!-- Room panel (original structure) -->
+    <section id="room-panel" aria-label="Location sharing room">
+        <form id="room-form">
+            <input id="display-name" type="text" name="displayName" placeholder="Your name" maxlength="30" autocomplete="name" aria-label="Your name">
+            <input id="room-code" type="text" name="roomCode" placeholder="Enter room code" maxlength="32" autocomplete="off" aria-label="Room code">
+            <button id="join-room" type="submit" disabled>Join</button>
+            <button id="create-room" type="button" disabled>Create</button>
+        </form>
+        <button id="copy-room-link" type="button" hidden>Copy invite link</button>
+    </section>
+
+    <!-- Status bar -->
+    <div id="status" role="status" aria-live="polite">
+        <span class="status-dot"></span>
+        <span class="status-text">Enter your name, then create or join a room.</span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet-src.min.js"
+            integrity="sha512-3/WyQrhTdqSVmSifQS62akgtNBhZha2lS44TnoN9Jk3J01FvsKK4suVmz6t5FtccGb5iJw58GoFhBjPE5EPc8Q=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/script.js"></script>
+
+</body>
+</html>

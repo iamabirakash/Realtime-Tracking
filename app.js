@@ -236,6 +236,10 @@ app.get("/", function (req, res) {
     res.render("index");
 });
 
+app.get("/app", function (req, res) {
+    res.render("app");
+});
+
 server.listen(PORT, function () {
     console.log(`Server is running at http://localhost:${PORT}`);
 });
