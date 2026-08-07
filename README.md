@@ -11,6 +11,7 @@ A real-time location-sharing web app. Users join a room and share their live dev
 - Map styles: Standard, Satellite, Terrain, and Dark.
 - Map actions: Locate me and Fit all users.
 - Route options to another member for driving, walking, or cycling.
+- Click the map to create shareable temporary landmarks for the room; creators can remove their own pins.
 - Room invite links and real-time room chat.
 
 ## Prerequisites
@@ -37,3 +38,4 @@ The app runs on port `3000` by default. Set the `PORT` environment variable to u
 - Location updates are sent whenever the browser geolocation watcher reports a change.
 - Map tiles and routing use public OpenStreetMap ecosystem services; availability and rate limits may vary.
 - Room and location state is stored in memory and is lost when the server restarts.
+- Landmark creation returns a server acknowledgement so invalid or failed pins show an error in the status bar.

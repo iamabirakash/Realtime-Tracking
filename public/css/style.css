@@ -386,6 +386,41 @@ body {
     outline-offset: 1px;
 }
 
+
+.landmark-popup {
+    min-width: 140px;
+    color: #111827;
+    font-size: 13px;
+}
+
+.landmark-popup strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.landmark-creator {
+    margin-bottom: 8px;
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.landmark-remove-button {
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: #b91c1c;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.landmark-remove-button:hover,
+.landmark-remove-button:focus {
+    background: #991b1b;
+    outline: none;
+}
 /* ===== Marker popup ===== */
 .marker-popup {
     min-width: 132px;

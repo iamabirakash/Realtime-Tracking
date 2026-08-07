@@ -169,6 +169,31 @@ mapActions.onAdd = () => {
     return container;
 };
 mapActions.addTo(map);
+map.on("click", (event) => {
+    if (!currentRoom) {
+        setStatus("Join a room before adding a shared pin.");
+        return;
+    }
+
+    const label = window.prompt("Landmark name (up to 50 characters):");
+    if (!label || !label.trim()) {
+        return;
+    }
+
+    socket.emit("add-landmark", {
+        latitude: event.latlng.lat,
+        longitude: event.latlng.lng,
+        label: label.trim().slice(0, 50),
+    }, (response = {}) => {
+        if (!response.ok) {
+            setStatus(response.error || "Could not add landmark.");
+            return;
+        }
+
+        addLandmarkMarker(response.landmark);
+        setStatus(`Landmark added: ${response.landmark.label}`);
+    });
+});
 
 const markers = {};
 const markerClusterGroup = L.markerClusterGroup({
@@ -177,6 +202,8 @@ const markerClusterGroup = L.markerClusterGroup({
     zoomToBoundsOnClick: true,
     maxClusterRadius: 45,
 }).addTo(map);
+const landmarkMarkers = {};
+const landmarkLayer = L.layerGroup().addTo(map);
 const userLocations = {};
 let currentLocation = null;
 let currentRoom = null;
@@ -239,9 +266,55 @@ function clearMarkers() {
     });
 }
 
+function clearLandmarks() {
+    Object.keys(landmarkMarkers).forEach((id) => {
+        landmarkLayer.removeLayer(landmarkMarkers[id]);
+        delete landmarkMarkers[id];
+    });
+}
+
+function addLandmarkMarker(landmark) {
+    if (!isValidCoordinate(landmark.latitude, landmark.longitude) || !landmark.id) {
+        return;
+    }
+
+    if (landmarkMarkers[landmark.id]) {
+        landmarkMarkers[landmark.id].setLatLng([landmark.latitude, landmark.longitude]);
+        return;
+    }
+
+    const marker = L.marker([landmark.latitude, landmark.longitude]);
+    const popupContent = document.createElement("div");
+    popupContent.className = "landmark-popup";
+
+    const title = document.createElement("strong");
+    title.textContent = landmark.label;
+    popupContent.appendChild(title);
+
+    const creator = document.createElement("div");
+    creator.className = "landmark-creator";
+    creator.textContent = `Added by ${landmark.creatorName || "room member"}`;
+    popupContent.appendChild(creator);
+
+    if (landmark.creatorId === socket.id) {
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "landmark-remove-button";
+        removeButton.textContent = "Remove pin";
+        removeButton.addEventListener("click", () => {
+            socket.emit("remove-landmark", { id: landmark.id });
+        });
+        popupContent.appendChild(removeButton);
+    }
+
+    marker.bindPopup(popupContent);
+    landmarkMarkers[landmark.id] = marker;
+    landmarkLayer.addLayer(marker);
+}
 function resetTrackingView() {
     clearRoute();
     clearMarkers();
+    clearLandmarks();
     updateUserList();
     hasCenteredMap = false;
     // Clear chat messages when leaving room
@@ -715,6 +788,16 @@ socket.on("room-error", (data = {}) => {
     failRoomJoin(data.error || "Could not join room.");
 });
 
+socket.on("receive-landmark", (landmark) => {
+    addLandmarkMarker(landmark);
+});
+
+socket.on("landmark-removed", (id) => {
+    if (landmarkMarkers[id]) {
+        landmarkLayer.removeLayer(landmarkMarkers[id]);
+        delete landmarkMarkers[id];
+    }
+});
 socket.on("receive-location", (data) => {
     const { id, latitude, longitude } = data;
     const name = normalizeDisplayName(data.name) || "Room member";

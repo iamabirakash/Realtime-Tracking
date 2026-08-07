@@ -8,6 +8,7 @@ const server = http.createServer(app);
 const io = socketio(server);
 const PORT = process.env.PORT || 3000;
 const roomLocations = new Map();
+const roomLandmarks = new Map();
 
 function normalizeRoomCode(value) {
     if (typeof value !== "string") {
@@ -42,6 +43,13 @@ function generateRoomCode() {
     return bytes.map((i) => alphabet[i]).join("");
 }
 
+function getRoomLandmarks(roomCode) {
+    if (!roomLandmarks.has(roomCode)) {
+        roomLandmarks.set(roomCode, new Map());
+    }
+
+    return roomLandmarks.get(roomCode);
+}
 function getRoomLocations(roomCode) {
     if (!roomLocations.has(roomCode)) {
         roomLocations.set(roomCode, new Map());
@@ -62,12 +70,20 @@ function removeSocketFromRoom(socket, roomCode) {
 
         if (locations.size === 0) {
             roomLocations.delete(roomCode);
+            roomLandmarks.delete(roomCode);
         }
     }
 
     socket.to(roomCode).emit("user-disconnected", socket.id);
 }
 
+function sendRoomLandmarks(socket, roomCode) {
+    const landmarks = getRoomLandmarks(roomCode);
+
+    landmarks.forEach(function (landmark) {
+        socket.emit("receive-landmark", landmark);
+    });
+}
 function sendRoomLocations(socket, roomCode) {
     const locations = getRoomLocations(roomCode);
 
@@ -117,6 +133,7 @@ io.on("connection", function (socket) {
         const response = { ok: true, roomCode, displayName };
         socket.emit("room-joined", response);
         sendRoomLocations(socket, roomCode);
+        sendRoomLandmarks(socket, roomCode);
 
         if (typeof callback === "function") {
             callback(response);
@@ -148,6 +165,50 @@ io.on("connection", function (socket) {
         io.to(currentRoom).emit("receive-location", { id: socket.id, ...location });
     });
 
+    socket.on("add-landmark", function (data = {}, callback) {
+        if (!currentRoom || !currentName) {
+            if (typeof callback === "function") callback({ ok: false, error: "Join a room first." });
+            return;
+        }
+
+        const latitude = Number(data.latitude);
+        const longitude = Number(data.longitude);
+        const label = typeof data.label === "string" ? data.label.trim().replace(/\s+/g, " ").slice(0, 50) : "";
+
+        if (!label || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            if (typeof callback === "function") callback({ ok: false, error: "Enter a valid landmark name and location." });
+            return;
+        }
+
+        const landmark = {
+            id: `${socket.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            latitude,
+            longitude,
+            label,
+            creatorId: socket.id,
+            creatorName: currentName,
+        };
+
+        getRoomLandmarks(currentRoom).set(landmark.id, landmark);
+        io.to(currentRoom).emit("receive-landmark", landmark);
+        if (typeof callback === "function") callback({ ok: true, landmark });
+    });
+
+    socket.on("remove-landmark", function (data = {}) {
+        if (!currentRoom || typeof data.id !== "string") {
+            return;
+        }
+
+        const landmarks = getRoomLandmarks(currentRoom);
+        const landmark = landmarks.get(data.id);
+
+        if (!landmark || landmark.creatorId !== socket.id) {
+            return;
+        }
+
+        landmarks.delete(data.id);
+        io.to(currentRoom).emit("landmark-removed", data.id);
+    });
     socket.on("chat-message", function (data = {}) {
         if (!currentRoom || !currentName) {
             return;
