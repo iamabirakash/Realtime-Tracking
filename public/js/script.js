@@ -203,6 +203,7 @@ const markerClusterGroup = L.markerClusterGroup({
     maxClusterRadius: 45,
 }).addTo(map);
 const landmarkMarkers = {};
+const landmarks = {};
 const landmarkLayer = L.layerGroup().addTo(map);
 const userLocations = {};
 let currentLocation = null;
@@ -211,6 +212,7 @@ let currentDisplayName = null;
 let pendingRoom = null;
 let joinTimeout = null;
 let selectedTargetId = null;
+let selectedLandmarkId = null;
 let selectedRouteMode = "driving";
 let routeLayer = null;
 let routeUpdateTimer = null;
@@ -246,6 +248,7 @@ function clearJoinTimeout() {
 
 function clearRoute() {
     selectedTargetId = null;
+    selectedLandmarkId = null;
 
     if (routeUpdateTimer) {
         clearTimeout(routeUpdateTimer);
@@ -278,6 +281,8 @@ function addLandmarkMarker(landmark) {
         return;
     }
 
+    landmarks[landmark.id] = landmark;
+
     if (landmarkMarkers[landmark.id]) {
         landmarkMarkers[landmark.id].setLatLng([landmark.latitude, landmark.longitude]);
         return;
@@ -295,6 +300,13 @@ function addLandmarkMarker(landmark) {
     creator.className = "landmark-creator";
     creator.textContent = `Added by ${landmark.creatorName || "room member"}`;
     popupContent.appendChild(creator);
+
+    const routeButton = document.createElement("button");
+    routeButton.type = "button";
+    routeButton.className = "route-button";
+    routeButton.textContent = "Route here";
+    routeButton.addEventListener("click", () => routeToLandmark(landmark.id));
+    popupContent.appendChild(routeButton);
 
     if (landmark.creatorId === socket.id) {
         const removeButton = document.createElement("button");
@@ -530,7 +542,7 @@ function drawDirectPath(targetLocation) {
 }
 
 async function drawRouteToSelectedUser() {
-    const targetLocation = userLocations[selectedTargetId];
+    const targetLocation = selectedTargetId ? userLocations[selectedTargetId] : landmarks[selectedLandmarkId];
 
     if (!currentLocation) {
         setStatus("Waiting for your location before routing.");
@@ -539,7 +551,7 @@ async function drawRouteToSelectedUser() {
 
     if (!targetLocation) {
         clearRoute();
-        setStatus("Selected user is no longer available.");
+        setStatus("Selected destination is no longer available.");
         return;
     }
 
@@ -591,7 +603,7 @@ async function drawRouteToSelectedUser() {
 }
 
 function scheduleRouteUpdate() {
-    if (!selectedTargetId) {
+    if (!selectedTargetId && !selectedLandmarkId) {
         return;
     }
 
@@ -607,6 +619,7 @@ function scheduleRouteUpdate() {
 
 function routeToUser(id, mode = "driving") {
     selectedRouteMode = mode;
+    selectedLandmarkId = null;
     if (id === socket.id) {
         setStatus("That pin is your current location.");
         return;
@@ -616,6 +629,17 @@ function routeToUser(id, mode = "driving") {
     drawRouteToSelectedUser();
 }
 
+function routeToLandmark(id, mode = selectedRouteMode) {
+    if (!landmarks[id]) {
+        setStatus("That landmark is no longer available.");
+        return;
+    }
+
+    selectedTargetId = null;
+    selectedLandmarkId = id;
+    selectedRouteMode = mode;
+    drawRouteToSelectedUser();
+}
 function bindMarkerPopup(id, marker) {
     const popupContent = document.createElement("div");
     popupContent.className = "marker-popup";
@@ -796,6 +820,12 @@ socket.on("landmark-removed", (id) => {
     if (landmarkMarkers[id]) {
         landmarkLayer.removeLayer(landmarkMarkers[id]);
         delete landmarkMarkers[id];
+    }
+
+    delete landmarks[id];
+    if (selectedLandmarkId === id) {
+        clearRoute();
+        setStatus("Selected landmark was removed.");
     }
 });
 socket.on("receive-location", (data) => {
