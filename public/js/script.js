@@ -94,11 +94,29 @@ const map = L.map("map", {
     zoomControl: false
 }).setView([0, 0], 2);
 
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
-}).addTo(map);
+const baseLayers = {
+    "Standard": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+    }),
+    "Satellite": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri",
+        maxZoom: 19,
+    }),
+    "Terrain": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        attribution: "Map data &copy; OpenStreetMap contributors, SRTM | Map style &copy; OpenTopoMap",
+        maxZoom: 17,
+    }),
+    "Dark": L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        subdomains: "abcd",
+        maxZoom: 20,
+    }),
+};
 
-L.control.zoom({ position: 'topright' }).addTo(map);
+baseLayers.Standard.addTo(map);
+L.control.layers(baseLayers, null, { position: "topright", collapsed: true }).addTo(map);
+L.control.zoom({ position: "topright" }).addTo(map);
 
 const markers = {};
 const markerClusterGroup = L.markerClusterGroup({
@@ -114,6 +132,7 @@ let currentDisplayName = null;
 let pendingRoom = null;
 let joinTimeout = null;
 let selectedTargetId = null;
+let selectedRouteMode = "driving";
 let routeLayer = null;
 let routeUpdateTimer = null;
 let hasCenteredMap = false;
@@ -394,7 +413,12 @@ async function drawRouteToSelectedUser() {
 
     const start = `${currentLocation.longitude},${currentLocation.latitude}`;
     const end = `${targetLocation.longitude},${targetLocation.latitude}`;
-    const routeUrl = `https://router.project-osrm.org/route/v1/driving/${start};${end}?overview=full&geometries=geojson`;
+    const routeServers = {
+        driving: "https://router.project-osrm.org/route/v1/driving",
+        walking: "https://routing.openstreetmap.de/routed-foot/route/v1/driving",
+        cycling: "https://routing.openstreetmap.de/routed-bike/route/v1/driving",
+    };
+    const routeUrl = `${routeServers[selectedRouteMode] || routeServers.driving}/${start};${end}?overview=full&geometries=geojson`;
 
     try {
         setStatus("Finding shortest path...");
@@ -449,7 +473,8 @@ function scheduleRouteUpdate() {
     }, 1200);
 }
 
-function routeToUser(id) {
+function routeToUser(id, mode = "driving") {
+    selectedRouteMode = mode;
     if (id === socket.id) {
         setStatus("That pin is your current location.");
         return;
@@ -469,11 +494,30 @@ function bindMarkerPopup(id, marker) {
     popupContent.appendChild(label);
 
     if (id !== socket.id) {
+        const modeSelect = document.createElement("select");
+        modeSelect.className = "route-mode-select";
+        modeSelect.setAttribute("aria-label", "Travel mode");
+        [
+            ["driving", "Driving"],
+            ["walking", "Walking"],
+            ["cycling", "Cycling"],
+        ].forEach(([value, labelText]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = labelText;
+            option.selected = value === selectedRouteMode;
+            modeSelect.appendChild(option);
+        });
+        modeSelect.addEventListener("change", () => {
+            selectedRouteMode = modeSelect.value;
+        });
+        popupContent.appendChild(modeSelect);
+
         const button = document.createElement("button");
         button.type = "button";
         button.className = "route-button";
-        button.textContent = "Shortest path";
-        button.addEventListener("click", () => routeToUser(id));
+        button.textContent = "Show route";
+        button.addEventListener("click", () => routeToUser(id, modeSelect.value));
         popupContent.appendChild(button);
     }
 

@@ -369,6 +369,17 @@ body {
     font-weight: 700;
 }
 
+.route-mode-select {
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 7px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #111827;
+    background: #ffffff;
+    font-size: 13px;
+}
+
 .route-button {
     width: 100%;
     padding: 8px 10px;
