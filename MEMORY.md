@@ -30,3 +30,10 @@
 - `views/index.ejs`: Leaflet cluster assets and static chat header.
 - `README.md`, `CLAUDE.md`: feature and architecture documentation.
 - Made Show route and Route here toggle to Hide route, allowing route traces to be cancelled without a page refresh.
+- Restored `/app` core behavior without changing its redesigned visual markup: real room joining, geolocation, live members, chat, shared landmarks, routing, invite copy, and room reconnect logic replaced the mock demo script.
+- Removed the inline mock/duplicate JavaScript from `views/app.ejs`; mapped its redesigned HTML to the real `public/js/script.js` hooks and added the `/app` route.
+- Fixed `/app` onboarding remaining visible after join by hiding its redesigned room panel from `finishRoomJoin()`.
+- Removed the duplicate generated Locate Me map control and bound `locateMe()` to the redesigned `#locate-btn`.
+- Strengthened Locate Me to invalidate the map and force exact centering on the latest location coordinates.
+- Fixed landmark placement so map clicks only prompt while the redesigned Drop a pin button is active; clicking it again cancels placement.
+- Added a Fit All Users FAB with a suitable SVG to the same column as Locate Me and Drop a Pin, and removed the duplicate generated control.

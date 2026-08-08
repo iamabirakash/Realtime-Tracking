@@ -115,20 +115,27 @@ const baseLayers = {
 };
 
 baseLayers.Standard.addTo(map);
-L.control.layers(baseLayers, null, { position: "topright", collapsed: true }).addTo(map);
-L.control.zoom({ position: "topright" }).addTo(map);
+L.control.layers(baseLayers, null, { position: "bottomleft", collapsed: true }).addTo(map);
+L.control.zoom({ position: "bottomleft" }).addTo(map);
 function locateMe() {
     if (!currentLocation) {
         setStatus("Waiting for your location...");
         return;
     }
 
-    map.setView([currentLocation.latitude, currentLocation.longitude], Math.max(map.getZoom(), 16));
+    const center = [currentLocation.latitude, currentLocation.longitude];
+    map.invalidateSize({ pan: false });
+    map.stop();
+    map.setView(center, Math.max(map.getZoom(), 16), { animate: false });
+    map.panTo(center, { animate: false });
     if (markers[socket.id]) {
         markers[socket.id].openPopup();
     }
     setStatus("Centered on your location.");
 }
+
+const locateMeButton = document.getElementById("locate-btn");
+if (locateMeButton) locateMeButton.addEventListener("click", locateMe);
 
 function fitAllUsers() {
     const locations = Object.values(userLocations)
@@ -148,28 +155,30 @@ function fitAllUsers() {
     setStatus(`Showing ${locations.length} room member${locations.length === 1 ? "" : "s"}.`);
 }
 
-const mapActions = L.control({ position: "topright" });
-mapActions.onAdd = () => {
-    const container = L.DomUtil.create("div", "leaflet-control map-actions");
-    const locateButton = L.DomUtil.create("button", "map-action-button", container);
-    locateButton.type = "button";
-    locateButton.title = "Center on my location";
-    locateButton.setAttribute("aria-label", "Center on my location");
-    locateButton.textContent = "Locate me";
-    locateButton.addEventListener("click", locateMe);
+const fitAllButton = document.getElementById("fit-all-btn");
+if (fitAllButton) fitAllButton.addEventListener("click", fitAllUsers);
 
-    const fitButton = L.DomUtil.create("button", "map-action-button", container);
-    fitButton.type = "button";
-    fitButton.title = "Show all room members";
-    fitButton.setAttribute("aria-label", "Show all room members");
-    fitButton.textContent = "Fit all";
-    fitButton.addEventListener("click", fitAllUsers);
+const landmarkButton = document.getElementById("landmark-btn");
+if (landmarkButton) {
+    landmarkButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!currentRoom) {
+            setStatus("Join a room before adding a shared pin.");
+            return;
+        }
 
-    L.DomEvent.disableClickPropagation(container);
-    return container;
-};
-mapActions.addTo(map);
+        landmarkMode = !landmarkMode;
+        landmarkButton.classList.toggle("active", landmarkMode);
+        map.getContainer().style.cursor = landmarkMode ? "crosshair" : "";
+        setStatus(landmarkMode ? "Tap the map to place a pin." : "Pin placement cancelled.");
+    });
+}
+
 map.on("click", (event) => {
+    if (!landmarkMode) {
+        return;
+    }
+
     if (!currentRoom) {
         setStatus("Join a room before adding a shared pin.");
         return;
@@ -191,6 +200,9 @@ map.on("click", (event) => {
         }
 
         addLandmarkMarker(response.landmark);
+        landmarkMode = false;
+        if (landmarkButton) landmarkButton.classList.remove("active");
+        map.getContainer().style.cursor = "";
         setStatus(`Landmark added: ${response.landmark.label}`);
     });
 });
@@ -218,12 +230,13 @@ let routeLayer = null;
 let routeUpdateTimer = null;
 let hasCenteredMap = false;
 let roomControlsBusy = false;
+let landmarkMode = false;
 
 function updateJoinButtonState() {
     const displayName = normalizeDisplayName(displayNameInput && displayNameInput.value);
     const canUseName = isValidDisplayName(displayName);
 
-    /* Join button is enabled as long as the name is valid –
+    /* Join button is enabled as long as the name is valid â“
        the room code can be empty (server will generate one) */
     if (joinRoomButton) {
         joinRoomButton.disabled = roomControlsBusy || !canUseName;
@@ -500,6 +513,8 @@ function finishRoomJoin(roomCode, displayName) {
     }
 
     setRoomUrl(currentRoom);
+    const onboardingPanel = document.getElementById("onboarding") || document.getElementById("room-panel");
+    if (onboardingPanel) onboardingPanel.classList.add("hidden");
     publishLocation();
     updateUserList();
     setStatus(`${currentDisplayName} joined room ${currentRoom}.`);
@@ -521,7 +536,7 @@ function joinRoom(roomCode) {
         return;
     }
 
-    /* Room code validation is handled by the server –
+    /* Room code validation is handled by the server â“
        if the client sends an empty/invalid code, the server generates one */
     if (!socket.connected) {
         failRoomJoin("Still connecting to the server. Try again in a moment.");
@@ -760,7 +775,7 @@ if (roomForm) {
         setTimeout(() => { createButtonSuppressed = false; }, 100);
     });
 
-    /* Catch Enter key directly – prevents browsers from firing
+    /* Catch Enter key directly â“ prevents browsers from firing
        the createRoomButton click when the Join button is disabled */
     roomForm.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -775,7 +790,7 @@ if (roomForm) {
 if (createRoomButton) {
     createRoomButton.addEventListener("click", () => {
         /* Prevent the Create button from firing when the user pressed Enter
-           in the form – some browsers trigger type="button" on Enter */
+           in the form â“ some browsers trigger type="button" on Enter */
         if (createButtonSuppressed) return;
 
         const inputValue = roomCodeInput?.value ?? '';

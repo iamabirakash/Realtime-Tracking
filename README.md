@@ -110,3 +110,10 @@ Contact
 - Maintainer: @iamabirakash
 - Issues: https://github.com/iamabirakash/Realtime-Tracking/issues
 - Show route and Route here actions toggle to Hide route so an active route can be cancelled without refreshing.
+- `/app` now keeps its redesigned Pingroom interface while using the real Socket.IO room, location, chat, landmark, and routing logic.
+- `views/app.ejs` uses the redesigned Pingroom markup with the shared `public/js/script.js`; it contains no inline application JavaScript.
+- The redesigned `/app` onboarding panel now closes automatically after a successful room create or join.
+- The redesigned `#locate-btn` is the single Locate Me control and uses the shared live-location centering behavior.
+- Locate Me now invalidates the map viewport and explicitly centers on the latest shared coordinates.
+- Landmark placement is opt-in: activate the Drop a pin button, tap the map, or tap the button again to cancel.
+- The map FAB column contains Locate Me, Drop a Pin, and Fit All Users controls.
