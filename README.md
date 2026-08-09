@@ -119,3 +119,6 @@ Contact
 - The map FAB column contains Locate Me, Drop a Pin, and Fit All Users controls.
 - The redesigned Members/Chat tabs now switch correctly, expand the chat sheet, and submit messages through Socket.IO.
 - Chat messages now separate own and other-user bubbles, show sender names, and use deterministic per-user accent colors.
+- The room pill displays the active room code, and the profile chip displays the user initials with Copy meeting link and Leave meeting actions.
+- Clicking the initials avatar opens the meeting actions menu; clicking outside closes it.
+- Copy meeting link displays a visible "Meeting link copied." toast after a successful copy.

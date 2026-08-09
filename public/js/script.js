@@ -7,12 +7,46 @@ const roomCodeInput = document.getElementById("room-code");
 const joinRoomButton = document.getElementById("join-room");
 const createRoomButton = document.getElementById("create-room");
 const copyRoomLinkButton = document.getElementById("copy-room-link");
+const roomNameElement = document.getElementById("room-name");
+const youChip = document.getElementById("you-chip");
+const youMenu = document.getElementById("you-menu");
+const menuLeaveButton = document.getElementById("menu-leave");
+let statusTimer = null;
+
+function getInitials(name) {
+    const parts = normalizeDisplayName(name).split(" ").filter(Boolean);
+    if (parts.length === 0) return "?";
+    return parts.length === 1
+        ? parts[0].slice(0, 2).toUpperCase()
+        : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+if (youChip && youMenu) {
+    youChip.addEventListener("click", (event) => {
+        event.stopPropagation();
+        youMenu.classList.toggle("open");
+    });
+
+    youMenu.addEventListener("click", (event) => {
+        event.stopPropagation();
+    });
+
+    document.addEventListener("click", () => {
+        youMenu.classList.remove("open");
+    });
+}
 
 function setStatus(message) {
     if (statusText) {
         statusText.textContent = message;
     } else if (statusElement) {
         statusElement.textContent = message;
+    }
+
+    if (statusElement && statusElement.classList.contains("toast")) {
+        statusElement.classList.add("show");
+        clearTimeout(statusTimer);
+        statusTimer = setTimeout(() => statusElement.classList.remove("show"), 2800);
     }
 }
 
@@ -410,10 +444,11 @@ async function copyInviteLink() {
 
     try {
         await navigator.clipboard.writeText(inviteLink);
-        setStatus(`Invite link copied for room ${currentRoom}.`);
+        setStatus("Meeting link copied.");
     } catch (error) {
         console.error(error);
-        window.prompt("Copy invite link", inviteLink);
+        window.prompt("Copy meeting link", inviteLink);
+        setStatus("Copy the meeting link from the prompt.");
     }
 }
 
@@ -513,6 +548,8 @@ function finishRoomJoin(roomCode, displayName) {
     }
 
     setRoomUrl(currentRoom);
+    if (roomNameElement) roomNameElement.textContent = currentRoom;
+    if (youChip) youChip.textContent = getInitials(currentDisplayName);
     const onboardingPanel = document.getElementById("onboarding") || document.getElementById("room-panel");
     if (onboardingPanel) onboardingPanel.classList.add("hidden");
     publishLocation();
@@ -809,6 +846,13 @@ if (createRoomButton) {
 
 if (copyRoomLinkButton) {
     copyRoomLinkButton.addEventListener("click", copyInviteLink);
+}
+
+if (menuLeaveButton) {
+    menuLeaveButton.addEventListener("click", () => {
+        socket.disconnect();
+        window.location.href = window.location.pathname;
+    });
 }
 
 // Initialize chat elements
