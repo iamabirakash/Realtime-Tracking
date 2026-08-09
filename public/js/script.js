@@ -820,12 +820,44 @@ if (chatForm && chatInput) {
     chatForm.addEventListener("submit", (event) => {
         event.preventDefault();
         const message = chatInput.value.trim();
-        if (message && currentRoom) {
-            socket.emit("chat-message", { message });
-            chatInput.value = "";
+        if (!message) {
+            return;
         }
+
+        if (!currentRoom) {
+            setStatus("Join a room before sending a message.");
+            return;
+        }
+
+        if (!socket.connected) {
+            setStatus("Chat is reconnecting to the server.");
+            return;
+        }
+
+        socket.emit("chat-message", { message });
+        chatInput.value = "";
     });
 }
+
+document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+        const target = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach((item) => {
+            item.classList.toggle("active", item === tab);
+        });
+
+        const membersPanel = document.getElementById("panel-members");
+        const chatPanel = document.getElementById("panel-chat");
+        if (membersPanel) membersPanel.classList.toggle("hidden", target !== "members");
+        if (chatPanel) chatPanel.classList.toggle("hidden", target !== "chat");
+
+        if (target === "chat") {
+            const sheet = document.getElementById("sheet");
+            if (sheet) sheet.setAttribute("data-state", "expanded");
+            if (chatInput) chatInput.focus();
+        }
+    });
+});
 
 if (navigator.geolocation) {
     navigator.geolocation.watchPosition(
@@ -940,6 +972,10 @@ socket.on("user-disconnected", (id) => {
 socket.on("chat-message", (data) => {
     const messageElement = document.createElement("div");
     messageElement.classList.add("chat-message");
+    const senderPalette = ["#14B8A6", "#818CF8", "#FBBF24", "#38BDF8", "#F472B6", "#A78BFA"];
+    const senderKey = String(data.id || data.name || "member");
+    const senderHash = Array.from(senderKey).reduce((total, character) => total + character.charCodeAt(0), 0);
+    messageElement.style.setProperty("--sender-color", senderPalette[senderHash % senderPalette.length]);
 
     // Determine if this message is from the current user
     const isOwnMessage = data.id === socket.id;
@@ -955,6 +991,7 @@ socket.on("chat-message", (data) => {
         const senderName = document.createElement("div");
         senderName.classList.add("chat-sender-name");
         senderName.textContent = data.name;
+        senderName.title = `Message from ${data.name}`;
         messageElement.appendChild(senderName);
     }
 

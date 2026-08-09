@@ -37,3 +37,5 @@
 - Strengthened Locate Me to invalidate the map and force exact centering on the latest location coordinates.
 - Fixed landmark placement so map clicks only prompt while the redesigned Drop a pin button is active; clicking it again cancels placement.
 - Added a Fit All Users FAB with a suitable SVG to the same column as Locate Me and Drop a Pin, and removed the duplicate generated control.
+- Fixed redesigned Chat tab behavior and submit handling in `public/js/script.js`; added reconnect/no-room feedback and server-side message type/length validation.
+- Improved app chat segregation with right-aligned accent bubbles for the current user, left-aligned labeled bubbles for others, and deterministic per-user sender colors.

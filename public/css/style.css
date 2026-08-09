@@ -414,6 +414,46 @@ input{ font-family:inherit; }
 }
 .chat-msg.own .chat-bubble{ background:var(--accent); border-radius:15px 15px 4px 15px; }
 
+/* Chat bubbles rendered by public/js/script.js */
+#chat-messages {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:0;
+  overflow-y:auto;
+}
+.chat-message {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  width:fit-content;
+  max-width:82%;
+}
+.chat-message.own { align-self:flex-end; align-items:flex-end; }
+.chat-message.other { align-self:flex-start; align-items:flex-start; }
+.chat-sender-name {
+  padding:0 5px;
+  color:var(--sender-color, var(--ink-muted));
+  font-size:10.5px;
+  font-weight:700;
+}
+.chat-message-bubble {
+  padding:9px 13px;
+  border-radius:15px 15px 15px 4px;
+  border-left:3px solid var(--sender-color, var(--ink-muted));
+  background:rgba(255,255,255,0.07);
+  color:var(--ink);
+  font-size:13px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.chat-message.own .chat-message-bubble {
+  border:0;
+  border-radius:15px 15px 4px 15px;
+  background:var(--accent);
+  color:#fff;
+}
+
 /* ============================================================
    Onboarding
    ============================================================ */

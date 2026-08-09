@@ -117,3 +117,5 @@ Contact
 - Locate Me now invalidates the map viewport and explicitly centers on the latest shared coordinates.
 - Landmark placement is opt-in: activate the Drop a pin button, tap the map, or tap the button again to cancel.
 - The map FAB column contains Locate Me, Drop a Pin, and Fit All Users controls.
+- The redesigned Members/Chat tabs now switch correctly, expand the chat sheet, and submit messages through Socket.IO.
+- Chat messages now separate own and other-user bubbles, show sender names, and use deterministic per-user accent colors.

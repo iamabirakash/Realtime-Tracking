@@ -214,7 +214,7 @@ io.on("connection", function (socket) {
             return;
         }
 
-        const message = data.message.trim();
+        const message = typeof data.message === "string" ? data.message.trim().slice(0, 240) : "";
         if (!message) {
             return;
         }
