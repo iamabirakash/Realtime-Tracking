@@ -348,6 +348,13 @@ function addLandmarkMarker(landmark) {
     creator.textContent = `Added by ${landmark.creatorName || "room member"}`;
     popupContent.appendChild(creator);
 
+    const routeControls = document.createElement("div");
+    routeControls.className = "route-controls";
+    const modeLabel = document.createElement("span");
+    modeLabel.className = "route-controls-label";
+    modeLabel.textContent = "Travel mode";
+    routeControls.appendChild(modeLabel);
+
     const modeSelect = document.createElement("select");
     modeSelect.className = "landmark-route-mode";
     modeSelect.setAttribute("aria-label", "Travel mode");
@@ -365,8 +372,11 @@ function addLandmarkMarker(landmark) {
     modeSelect.addEventListener("change", () => {
         selectedRouteMode = modeSelect.value;
     });
-    popupContent.appendChild(modeSelect);
+    routeControls.appendChild(modeSelect);
+    popupContent.appendChild(routeControls);
 
+    const actionRow = document.createElement("div");
+    actionRow.className = "landmark-actions";
     const routeButton = document.createElement("button");
     routeButton.type = "button";
     routeButton.className = "route-button";
@@ -381,7 +391,7 @@ function addLandmarkMarker(landmark) {
         routeToLandmark(landmark.id, modeSelect.value);
         routeButton.textContent = "Hide route";
     });
-    popupContent.appendChild(routeButton);
+    actionRow.appendChild(routeButton);
 
     const removeButton = document.createElement("button");
     const isCreator = landmark.creatorId === socket.id;
@@ -397,7 +407,8 @@ function addLandmarkMarker(landmark) {
     } else {
         removeButton.classList.add("landmark-remove-button--disabled");
     }
-    popupContent.appendChild(removeButton);
+    actionRow.appendChild(removeButton);
+    popupContent.appendChild(actionRow);
 
     marker.bindPopup(popupContent);
     landmarkMarkers[landmark.id] = marker;
@@ -735,6 +746,13 @@ function bindMarkerPopup(id, marker) {
     popupContent.appendChild(label);
 
     if (id !== socket.id) {
+        const routeControls = document.createElement("div");
+        routeControls.className = "route-controls";
+        const modeLabel = document.createElement("span");
+        modeLabel.className = "route-controls-label";
+        modeLabel.textContent = "Travel mode";
+        routeControls.appendChild(modeLabel);
+
         const modeSelect = document.createElement("select");
         modeSelect.className = "route-mode-select";
         modeSelect.setAttribute("aria-label", "Travel mode");
@@ -752,7 +770,8 @@ function bindMarkerPopup(id, marker) {
         modeSelect.addEventListener("change", () => {
             selectedRouteMode = modeSelect.value;
         });
-        popupContent.appendChild(modeSelect);
+        routeControls.appendChild(modeSelect);
+        popupContent.appendChild(routeControls);
 
         const button = document.createElement("button");
         button.type = "button";

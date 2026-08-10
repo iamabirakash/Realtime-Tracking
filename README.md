@@ -122,3 +122,7 @@ Contact
 - The room pill displays the active room code, and the profile chip displays the user initials with Copy meeting link and Leave meeting actions.
 - Clicking the initials avatar opens the meeting actions menu; clicking outside closes it.
 - Copy meeting link displays a visible "Meeting link copied." toast after a successful copy.
+- Member rows now have clear spacing, borders, and selected-user styling for easier scanning.
+- The room creation and join form now uses consistent gaps between the name field, actions, divider, and room-code controls.
+- Route popups now group the travel-mode selector and actions into a clearer layout, with distinct Route/Hide route and creator-only Remove pin controls.
+- Route selection dropdowns now use a dark background with white option text to match the application theme.

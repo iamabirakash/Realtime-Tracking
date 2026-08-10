@@ -42,3 +42,7 @@
 - Updated the redesigned room pill/profile menu: active room codes and user initials now render, with Copy meeting link and Leave meeting actions.
 - Fixed the initials avatar menu by adding click toggle and outside-click close behavior in `public/js/script.js`.
 - Made Copy meeting link show a visible temporary confirmation toast, with prompt fallback feedback.
+- Improved member readability by styling the live `.user-item` rows with vertical gaps, padding, borders, hover state, and a distinct current-user state.
+- Added consistent onboarding form spacing between the name field, Create a room button, join divider, room code, and Join button; removed the negative spacing on the helper text.
+- Redesigned route and landmark popup controls with grouped travel-mode selectors, stronger Route/Hide route actions, and a visually distinct creator-only Remove pin action.
+- Fixed route mode dropdown menus showing white option panels by applying dark color-scheme styling and white option text.
