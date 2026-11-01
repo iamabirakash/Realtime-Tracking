@@ -1,0 +1,9 @@
+node_modules
+.git
+.claude
+.env
+.env.*
+test-results
+artifacts
+test
+scripts

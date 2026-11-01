@@ -1,121 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Pingroom</title>
-<link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
-      integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
-      crossorigin="anonymous" referrerpolicy="no-referrer">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css">
-<link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
-<link rel="manifest" href="images/site.webmanifest">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Share live locations in a temporary Pingroom, with optional location sharing, room chat, and shared pins.">
+  <meta name="theme-color" content="#0A0E1A">
+  <title>Pingroom</title>
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/vendor/markercluster/MarkerCluster.css">
+  <link rel="stylesheet" href="/vendor/markercluster/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+  <link rel="manifest" href="/images/site.webmanifest">
+  <script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/socket.io/socket.io.js"></script>
+  <script defer src="/vendor/markercluster/leaflet.markercluster.js"></script>
+  <script defer src="/js/route-controller.js"></script>
+  <script defer src="/js/script.js"></script>
 </head>
 <body>
-
-<div class="app-shell">
+<main class="app-shell" id="app-shell" inert aria-label="Live room map and members">
   <div class="map-area">
-    <div id="map"></div>
-
+    <div id="map" aria-label="Map of shared room locations"></div>
     <div class="top-bar">
-      <div class="room-pill" id="room-pill" title="Room details">
-        <span class="live-dot"></span>
+      <div class="room-pill offline" id="room-pill">
+        <span class="live-dot" aria-hidden="true"></span>
         <span class="room-pill-text">
-          <span class="room-name" id="room-name">—</span>
-          <span class="room-meta mono" id="room-meta"><span id="member-count">1</span> here
+          <span class="room-name mono" id="room-name">No room</span>
+          <span class="room-meta"><span id="member-count">0</span> members</span>
         </span>
       </div>
-      <div style="position:relative;">
-        <button class="you-chip" id="you-chip" style="--user-color:#FF5A36" title="You">Y</button>
-        <div class="you-menu" id="you-menu">
-          <button id="copy-room-link" hidden>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy meeting link
-          </button>
-          <div class="divider"></div>
-          <button id="menu-leave" class="danger">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Leave meeting
-          </button>
+      <div class="profile-menu">
+        <button class="you-chip" id="you-chip" style="--user-color:#FF5A36" type="button" aria-label="Your room actions" aria-haspopup="menu" aria-controls="you-menu" aria-expanded="false">?</button>
+        <div class="you-menu" id="you-menu" role="menu" aria-label="Room actions" hidden>
+          <button id="copy-room-link" type="button" role="menuitem">Copy meeting link</button>
+          <button id="menu-leave" type="button" role="menuitem">Leave meeting</button>
+          <button id="menu-close" type="button" role="menuitem" class="danger" hidden>Close room for everyone</button>
         </div>
       </div>
     </div>
-
-    <div class="map-fab-stack">
-      <button class="fab" id="locate-btn" title="Center on me">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    <div class="map-fab-stack" aria-label="Map actions">
+      <button class="fab" id="locate-btn" type="button" title="Center on me" aria-label="Center on my location">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
-      <button class="fab" id="landmark-btn" title="Drop a pin">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 2 5 5 5 9c0 5.5 7 13 7 13s7-7.5 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>
+      <button class="fab" id="landmark-btn" type="button" title="Drop a pin" aria-label="Place a shared pin" aria-pressed="false" disabled>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8 2 5 5 5 9c0 5.5 7 13 7 13s7-7.5 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>
       </button>
-      <button class="fab" id="fit-all-btn" title="Fit all users" aria-label="Fit all users">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/><circle cx="12" cy="12" r="3"/></svg>
+      <button class="fab" id="fit-all-btn" type="button" title="Fit all users" aria-label="Fit all shared locations">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
     </div>
   </div>
-
-  <section class="sheet" id="sheet" data-state="peek">
-    <div class="sheet-handle" id="sheet-handle"></div>
-
-    <div class="sheet-peek">
-      <div class="avatar-row" id="avatar-row"></div>
-      <form class="quick-chat" id="chat-form">
-        <input id="chat-input" placeholder="Message the room…" autocomplete="off" maxlength="240">
-        <button type="submit" aria-label="Send message">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
-      </form>
+  <section class="sheet" id="sheet" data-state="peek" aria-label="Room members and chat">
+    <div class="sheet-handle" id="sheet-handle">
+      <button class="sheet-chevron" id="sheet-chevron" type="button" aria-label="Expand panel" aria-controls="sheet-body" aria-expanded="false">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
     </div>
-
-    <div class="sheet-body">
-      <div class="sheet-tabs">
-        <button class="tab active" data-tab="members">Members</button>
-        <button class="tab" data-tab="chat">Chat</button>
+    <div class="sheet-peek">
+      <div class="room-health"><span id="connection-status" role="status">Connecting…</span><button id="share-location" class="share-toggle" type="button" aria-pressed="false" disabled>Share location</button></div>
+      <div class="sharing-status" id="sharing-status">Location sharing is off</div>
+      <div class="avatar-row" id="avatar-row" aria-label="Room members"></div>
+      <form class="quick-chat" id="chat-form">
+        <label class="sr-only" for="chat-input">Message the room</label>
+        <input id="chat-input" placeholder="Message the room…" autocomplete="off" maxlength="240" aria-describedby="chat-feedback" disabled>
+        <button id="chat-send" type="submit" aria-label="Send message" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+      </form>
+      <p id="chat-feedback" class="chat-feedback" role="status"></p>
+    </div>
+    <div class="sheet-body" id="sheet-body" inert>
+      <div class="sheet-tabs" role="tablist" aria-label="Room panels">
+        <button class="tab active" id="tab-members" type="button" data-tab="members" role="tab" aria-controls="panel-members" aria-selected="true">Members</button>
+        <button class="tab" id="tab-chat" type="button" data-tab="chat" role="tab" aria-controls="panel-chat" aria-selected="false" tabindex="-1">Chat</button>
       </div>
-      <div class="tab-panel" id="panel-members">
-        <ul class="member-list" id="user-list"></ul>
+      <div class="tab-panel" id="panel-members" role="tabpanel" aria-labelledby="tab-members" tabindex="0"><ul class="member-list" id="user-list"></ul></div>
+      <div class="tab-panel" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" tabindex="0" hidden>
+        <p class="empty-state" id="chat-empty">No messages yet. Say hello to the room.</p>
+        <div class="chat-thread" id="chat-messages" role="log" aria-label="Room messages" aria-live="polite" aria-relevant="additions"></div>
       </div>
-      <div class="tab-panel hidden" id="panel-chat">
-        <div class="chat-thread" id="chat-messages"></div>
-      </div>
+      <p class="room-expiry mono" id="room-expiry">Rooms expire after 2 hours</p>
     </div>
   </section>
-</div>
+</main>
 
-<div class="onboarding" id="room-panel">
+<section class="onboarding" id="room-panel" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" aria-describedby="privacy-note">
   <div class="onboarding-card">
-    <div class="ob-logo"><span class="live-dot"></span> Pingroom</div>
-    <h1>What should people call you?</h1>
+    <a class="ob-logo" href="/" aria-label="Pingroom home"><span class="live-dot" aria-hidden="true"></span> Pingroom</a>
+    <h1 id="onboarding-title">What should people call you?</h1>
+    <p class="notice" id="secure-context-notice" hidden>Location sharing needs HTTPS. Rooms and chat still work here; open a secure URL to share your location.</p>
     <form id="room-form">
-      <div>
-        <span class="field-label">Your name</span>
-        <input id="display-name" name="displayName" placeholder="e.g. Priya" maxlength="30" autocomplete="name">
-      </div>
+      <div><label class="field-label" for="display-name">Your name</label><input id="display-name" name="displayName" placeholder="e.g. Priya" minlength="2" maxlength="30" autocomplete="name" required></div>
+      <label class="sharing-choice"><input id="share-on-join" type="checkbox"><span>Share my location when I join</span></label>
       <button class="btn-primary" id="create-room" type="button" disabled>Create a room →</button>
       <div class="ob-divider"><span>or join with a code</span></div>
       <div class="ob-join-row">
-        <input id="room-code" class="mono" name="roomCode" placeholder="ROOM CODE" maxlength="32" autocomplete="off">
+        <label class="sr-only" for="room-code">16-character room code</label>
+        <input id="room-code" class="mono" name="roomCode" placeholder="16-CHARACTER CODE" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false">
         <button class="btn-secondary" id="join-room" type="submit" disabled>Join</button>
       </div>
+      <p class="join-feedback" id="join-feedback" role="status">Connecting to the room server…</p>
     </form>
-    <p class="ob-sub">No account needed. Everything here disappears when the room closes.</p>
+    <p class="ob-sub" id="privacy-note">Anyone with the invite can join. Your name is remembered in this browser. Locations, up to 100 messages, and pins stay in server memory until the room closes or expires (2 hours). Unexpected disconnects have a 30-second reconnect window. Map tiles and requested directions use external providers; routing sends the start and destination coordinates. You can pause sharing at any time.</p>
   </div>
-</div>
-
+</section>
 <div class="toast" id="status" role="status" aria-live="polite"><span class="status-text"></span></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet-src.min.js"
-        integrity="sha512-3/WyQrhTdqSVmSifQS62akgtNBhZha2lS44TnoN9Jk3J01FvsKK4suVmz6t5FtccGb5iJw58GoFhBjPE5EPc8Q=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/js/script.js"></script>
+<noscript><p class="noscript">Pingroom needs JavaScript for rooms and maps. Enable JavaScript and reload.</p></noscript>
 </body>
 </html>

@@ -1,0 +1,26 @@
+name: Checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --audit-level=moderate
+      - run: npx playwright install --with-deps chromium
+        if: matrix.node == 24
+      - run: npm run test:browser
+        if: matrix.node == 24
+      - uses: actions/upload-artifact@v4
+        if: failure() && matrix.node == 24
+        with:
+          name: browser-results
+          path: test-results/

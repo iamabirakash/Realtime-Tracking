@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      ALLOWED_ORIGINS: https://${PINGROOM_DOMAIN:?Set PINGROOM_DOMAIN to your public domain}
+      WEB_CONCURRENCY: "1"
+    expose: ["3000"]
+    deploy:
+      replicas: 1
+    init: true
+    stop_grace_period: 10s
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      PINGROOM_DOMAIN: ${PINGROOM_DOMAIN:?Set PINGROOM_DOMAIN}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+volumes:
+  caddy_data:
+  caddy_config:

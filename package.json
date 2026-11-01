@@ -1,19 +1,30 @@
 {
   "name": "device_tracking",
   "version": "1.0.0",
-  "description": "",
+  "description": "Ephemeral room-based location sharing with chat, shared pins and explicit sharing controls",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "check": "node --check app.js && node --check public/js/script.js",
-    "test": "npm run check"
+    "check": "node --check app.js && node --check server/tracking-server.js && node --check public/js/script.js && node --check public/js/route-controller.js",
+    "test": "npm run check && node --test test/*.test.js",
+    "test:browser": "node scripts/check-browser.cjs",
+    "test:all": "npm test && npm run test:browser"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "engines": { "node": ">=22 <27" },
   "dependencies": {
-    "ejs": "^3.1.10",
-    "express": "^4.19.2",
-    "socket.io": "^4.7.5"
+    "ejs": "^7.0.2",
+    "express": "^4.22.3",
+    "helmet": "^8.3.0",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "axe-core": "^4.14.0",
+    "playwright": "^1.64.1",
+    "socket.io-client": "^4.8.4"
   }
 }

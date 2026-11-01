@@ -1,128 +1,121 @@
-# Realtime Device Tracking
+# Pingroom / Device Tracking
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Repo Size](https://img.shields.io/github/repo-size/iamabirakash/Realtime-Tracking)](https://github.com/iamabirakash/Realtime-Tracking) [![Built with Leaflet](https://img.shields.io/badge/leaflet-1.9.4-brightgreen)](https://leafletjs.com/)
+Temporary, invite-based rooms for live locations, room chat, shared pins, and optional driving/walking/cycling directions. Express, Socket.IO, Leaflet, EJS, and vanilla JavaScript. No account or database is required.
 
-A modern, lightweight web app for sharing live device locations inside short-lived rooms. Team up with friends or colleagues and watch locations update in real time on an interactive map.
+## Run locally
 
-Demo: (Self-hosted) — run locally and open the same room from multiple devices to see live updates.
+Use Node.js 24 LTS (Node 22–26 supported). The repository includes `.nvmrc` and a lockfile.
 
----
-
-Highlights
-- Real-time room-based location sharing (per-room member list)
-- Beautiful, responsive Leaflet map with multiple base layers (Standard, Satellite, Terrain, Dark)
-- Clustered markers and polished member pins
-- “Locate me” and “Fit all users” actions for quick navigation
-- Lightweight in-memory server for small demos and internal use (no DB required)
-- Click-to-create shareable temporary landmarks with creator-only removal
-- Simple room invites and integrated chat for quick coordination
-- Routing options (Driving / Walking / Cycling) using public routing services
-
-Screenshots
-
-<img width="1920" height="899" alt="image" src="https://github.com/user-attachments/assets/11350cd1-ddb4-4d8e-b4de-16d4db54ce35" />
-
-
-- Map with clustered members and sidebar
-- Landmark popup with route actions
-
----
-
-Quick start
-
-Prerequisites
-- Node.js (v16+ recommended)
-
-Install
-
-```bash
-npm install
-```
-
-Run
-
-```bash
+```sh
+npm ci
 npm start
 ```
 
-By default the app listens on port 3000. To change the port, set the PORT environment variable, for example:
+Open `http://localhost:3000`. For a different port in PowerShell:
 
-```bash
-PORT=8080 npm start
+```powershell
+$env:PORT = "8080"
+npm start
 ```
 
-How it works (short)
-- Open the app and create a room or join an existing room using a room code/link.
-- Enter a display name and allow location access in the browser.
-- Your device will periodically send location updates to the room via WebSocket.
-- Other room members will see your location update on their maps in real time.
-- Click the map to add a temporary landmark (shareable link) — the landmark creator can remove it.
+Create a room with a display name, or join an existing room using its 16-character code or invite link. Create always makes a new room. Unknown/expired codes are rejected. Invite links prefill the code and require an explicit Join action.
 
-Configuration & Notes
-- No database: room state and locations are kept in server memory. Restarting the server will clear rooms and landmarks.
-- Map tiles and routing: this project uses public OpenStreetMap ecosystem tile servers and routing providers. Availability and rate limits are out of scope — consider adding your own tile/routing keys/services for production.
-- Privacy: location sharing is ephemeral and intended for short-lived coordination. The server does not persist location history by default.
+Location sharing starts only when you check **Share my location when I join**, or press **Share location** inside the room. **Pause sharing** stops the device watch and removes the shared position. Members can participate in chat without sharing their location and remain visible in the member list.
 
-Environment variables
-- PORT — the HTTP port to bind (defaults to 3000)
-- (Optional) Add keys/config for third-party providers if you choose to use paid map or routing providers in production.
+Anyone holding an invite can join and see that room's shared positions and recent chat. There is no PIN feature. Protect the link as an access secret; the room creator can close the room for everyone from the profile menu.
 
-Security
-- This project is intended for local/demo use. If deploying publicly:
-  - Terminate TLS (run behind a reverse proxy or use a platform that provides HTTPS).
-  - Add authentication/authorization if rooms should be private beyond the invite link.
-  - Replace in-memory room storage with a persistent store if you need durability.
+## HTTPS and phones
 
-Development
-- Code is primarily JavaScript, with EJS templates and CSS for the front end.
-- Live reloading tip: use nodemon for a faster local development loop:
+Browser geolocation requires a secure context. Localhost supports development on the same computer, but a phone visiting another computer's plain `http://192.168...` address normally cannot share location. Use a trusted HTTPS development proxy/tunnel or an HTTPS deployment. The app explains insecure-context and permission errors and still supports rooms/chat without GPS.
 
-```bash
-npm install -g nodemon
-nodemon --watch . --exec "npm start"
+The layout uses a collapsible bottom sheet below 900px and a docked sidebar above it. It adapts to width, viewport height, touch gestures, safe areas, and viewport resizing. Browser layout checks cover 240–3840px plus short/landscape layouts. Physical devices and background GPS reliability require separate validation; browsers may suspend background pages.
+
+## Data and lifecycle
+
+- Rooms are stored **only in one server process**, expire after 2 hours, and are deleted immediately when the last member explicitly leaves or the creator closes the room.
+- Unexpected disconnections get a 30-second reconnect window (cleanup runs every 5 seconds). Their live position is removed immediately. Reconnection replaces client state from an authoritative snapshot.
+- Pins expire after 1 hour or at room expiry, whichever comes first. Only their creator can remove them; ownership survives reconnects using a server-issued member session.
+- Up to 100 recent messages are kept in memory per room and replayed after reconnect. Older messages are discarded. There is no permanent location or chat archive.
+- The last display name is remembered in localStorage. A random member credential is stored in sessionStorage for the tab; blocked storage falls back to in-memory operation. Anonymous server session records expire after 3 hours of inactivity after disconnection.
+- Map tile requests go directly to OpenStreetMap, Esri, OpenTopoMap, or CARTO. Requested routes send start/destination coordinates to the selected routing provider. The app does not upload coordinates to a routing provider until a route is requested.
+- The map libraries are served locally; an external JavaScript CDN is not needed. Map tiles and directions still require provider availability. A failed route is labelled a **straight-line estimate, not a travel route**.
+- Restarting the server clears room data. If a restart loses a room, clients must create a new one; the app does not silently recreate an expired invite.
+
+## Limits and security
+
+The server validates every event payload, uses cryptographically generated room/session identifiers, enforces creator permissions, sets browser security headers, checks WebSocket origins, caps request sizes, and applies per-member/IP event budgets.
+
+Defaults in `server/tracking-server.js`:
+
+| Resource | Limit |
+| --- | --- |
+| Rooms | 200 |
+| Members per room | 50 |
+| Pins per room | 100 |
+| Recent chat messages per room | 100 |
+| Transport connections | 1,000 total; 40 per directly connected IP |
+| Member-session records | 10,000 |
+| Incoming socket message | 8 KiB |
+| Join attempts | 12 per member session per minute |
+| GPS events | 20 per member session per 10 seconds; client coalesces to one per 3 seconds |
+| Chat sends | 20 per member session per 10 seconds |
+| Pin creation | 10 per member session per minute |
+| Position freshness | 60 seconds |
+
+Browser-reported positions are not verified proof of physical presence. Use HTTPS and infrastructure-level connection/request limits for public deployments. The app does not trust arbitrary forwarded IP headers; behind the supplied proxy, clients share the proxy's IP quota. Tune edge quotas and the application limits for your expected room sizes rather than blindly trusting `X-Forwarded-For`.
+
+## Configuration
+
+`.env.example` lists values; Node reads real environment variables, not that file automatically.
+
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | Listen port, default 3000 |
+| `HOST` | Bind address, default 0.0.0.0 |
+| `NODE_ENV` | Set to `production` behind HTTPS |
+| `ALLOWED_ORIGINS` | Comma-separated exact public origins, e.g. `https://pingroom.example.com`; required in production |
+| `WEB_CONCURRENCY` | Must be 1 for the supported ephemeral store |
+| `ROUTING_DRIVING_URL` | Optional HTTPS OSRM-compatible route endpoint |
+| `ROUTING_WALKING_URL` | Optional HTTPS foot-routing endpoint |
+| `ROUTING_CYCLING_URL` | Optional HTTPS bike-routing endpoint |
+
+Without an explicit origin list in development, only browser origins whose host matches the request host are accepted. Native clients without an Origin still need a valid invite and obey the same limits.
+
+## Deployment
+
+Run **one worker and one replica**. The process-local room store is intentional. Do not use PM2 cluster mode or multiple replicas: a Socket.IO adapter alone cannot synchronize the application's Maps. A future horizontal deployment needs both shared ephemeral room/session state with TTL and an appropriate Socket.IO adapter.
+
+`Dockerfile`, `compose.yml`, and `Caddyfile` provide a single app process behind Caddy HTTPS. Point a public domain at your server, allow ports 80/443, then:
+
+```powershell
+$env:PINGROOM_DOMAIN = "pingroom.example.com"
+docker compose up --build -d
 ```
 
-Project structure (high level)
-- public/ — static frontend assets (JS, CSS, images)
-- views/ — EJS templates used to render the main UI
-- server.js (or app entry) — Express + Socket.io server logic
+Use a real domain you control. Caddy obtains certificates for that domain; no deployment or certificate issuance is performed by editing this repository. `/healthz` returns readiness; SIGTERM/SIGINT stop connections and clear in-memory state. Set `ALLOWED_ORIGINS` explicitly when using a different reverse proxy, and preserve its Host header.
 
-Contributing
-- Bug reports, feature requests and pull requests are welcome.
-- Start by opening an issue describing what you want to change, or submit a PR against the default branch with a clear commit message and description.
+## Verification
 
-Troubleshooting
-- If devices cannot see each other on localhost, ensure all clients are on the same network and the server host is reachable (use the machine’s LAN IP rather than `localhost` for other devices).
-- If map tiles fail to load, check browser console for CORS or rate-limit errors from the tile provider.
+```sh
+npm test
+npx playwright install chromium
+npm run test:browser
+npm audit
+```
 
-FAQ
-- Q: Do I need API keys for routing?  
-  A: No — the project uses public routing endpoints. For production you may want to configure a paid routing provider or a personal API key to avoid rate limits.
+- `npm test`: syntax checks and server/routing regression tests using isolated local servers.
+- `npm run test:browser`: Chromium room, consent, XSS, delivery, reconnect, ownership, optional-storage, accessibility, and responsive-layout checks. Uses synthetic GPS and deterministic tile responses; saves screenshots and results under ignored `test-results/`.
+- The browser suite tests the real local JavaScript, CSS, Socket.IO server, and templates. It does not certify external routing availability or physical-device GPS.
+- GitHub Actions runs server tests on Node 22/24/26, audits dependencies, and runs Chromium checks on Node 24.
 
-Credits & Acknowledgements
-- Built with Leaflet, MarkerCluster and OpenStreetMap tiles.
-- Icons and UI design inspired by common modern mapping apps.
+## Files
 
-License
-- MIT — see the LICENSE file for details.
+- `app.js`: validated startup, single-worker guard, graceful shutdown.
+- `server/tracking-server.js`: room/member/session model, validation, event authorization, limits, cleanup, security headers.
+- `public/js/script.js`: map, rooms, opt-in sharing, chat, snapshots, responsive sheet and accessibility behavior.
+- `public/js/route-controller.js`: cancellable routing lifecycle.
+- `views/app.ejs`, `views/index.ejs`, `public/css/style.css`: application and landing-page presentation.
+- `test/`, `scripts/check-browser.cjs`: regression suites.
+- `PROJECT_REVIEW.md`: historical findings; `REMEDIATION.md`: implementation and verification mapping.
 
-Contact
-- Maintainer: @iamabirakash
-- Issues: https://github.com/iamabirakash/Realtime-Tracking/issues
-- Show route and Route here actions toggle to Hide route so an active route can be cancelled without refreshing.
-- `/app` now keeps its redesigned Pingroom interface while using the real Socket.IO room, location, chat, landmark, and routing logic.
-- `views/app.ejs` uses the redesigned Pingroom markup with the shared `public/js/script.js`; it contains no inline application JavaScript.
-- The redesigned `/app` onboarding panel now closes automatically after a successful room create or join.
-- The redesigned `#locate-btn` is the single Locate Me control and uses the shared live-location centering behavior.
-- Locate Me now invalidates the map viewport and explicitly centers on the latest shared coordinates.
-- Landmark placement is opt-in: activate the Drop a pin button, tap the map, or tap the button again to cancel.
-- The map FAB column contains Locate Me, Drop a Pin, and Fit All Users controls.
-- The redesigned Members/Chat tabs now switch correctly, expand the chat sheet, and submit messages through Socket.IO.
-- Chat messages now separate own and other-user bubbles, show sender names, and use deterministic per-user accent colors.
-- The room pill displays the active room code, and the profile chip displays the user initials with Copy meeting link and Leave meeting actions.
-- Clicking the initials avatar opens the meeting actions menu; clicking outside closes it.
-- Copy meeting link displays a visible "Meeting link copied." toast after a successful copy.
-- Member rows now have clear spacing, borders, and selected-user styling for easier scanning.
-- The room creation and join form now uses consistent gaps between the name field, actions, divider, and room-code controls.
-- Route popups now group the travel-mode selector and actions into a clearer layout, with distinct Route/Hide route and creator-only Remove pin controls.
-- Route selection dropdowns now use a dark background with white option text to match the application theme.
+MIT licensed. See [LICENSE](LICENSE). Third-party packages and map data retain their respective licenses and attribution requirements.

@@ -1,1107 +1,635 @@
-const socket = io();
-const statusElement = document.getElementById("status");
-const statusText = document.querySelector("#status .status-text");
-const roomForm = document.getElementById("room-form");
-const displayNameInput = document.getElementById("display-name");
-const roomCodeInput = document.getElementById("room-code");
-const joinRoomButton = document.getElementById("join-room");
-const createRoomButton = document.getElementById("create-room");
-const copyRoomLinkButton = document.getElementById("copy-room-link");
-const roomNameElement = document.getElementById("room-name");
-const youChip = document.getElementById("you-chip");
-const youMenu = document.getElementById("you-menu");
-const menuLeaveButton = document.getElementById("menu-leave");
-let statusTimer = null;
+"use strict";
 
-function getInitials(name) {
-    const parts = normalizeDisplayName(name).split(" ").filter(Boolean);
-    if (parts.length === 0) return "?";
-    return parts.length === 1
-        ? parts[0].slice(0, 2).toUpperCase()
-        : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
-
-if (youChip && youMenu) {
-    youChip.addEventListener("click", (event) => {
-        event.stopPropagation();
-        youMenu.classList.toggle("open");
-    });
-
-    youMenu.addEventListener("click", (event) => {
-        event.stopPropagation();
-    });
-
-    document.addEventListener("click", () => {
-        youMenu.classList.remove("open");
-    });
-}
-
-function setStatus(message) {
-    if (statusText) {
+(() => {
+    const byId = (id) => document.getElementById(id);
+    const onboarding = byId("room-panel");
+    const feedback = byId("join-feedback");
+    const statusText = document.querySelector("#status .status-text");
+    let statusTimer;
+    function setStatus(message) {
         statusText.textContent = message;
-    } else if (statusElement) {
-        statusElement.textContent = message;
-    }
-
-    if (statusElement && statusElement.classList.contains("toast")) {
-        statusElement.classList.add("show");
+        if (!onboarding.hidden) feedback.textContent = message;
+        byId("status").classList.add("show");
         clearTimeout(statusTimer);
-        statusTimer = setTimeout(() => statusElement.classList.remove("show"), 2800);
+        statusTimer = setTimeout(() => byId("status").classList.remove("show"), 6500);
     }
-}
-
-function isValidCoordinate(latitude, longitude) {
-    return (
-        Number.isFinite(latitude) &&
-        Number.isFinite(longitude) &&
-        latitude >= -90 &&
-        latitude <= 90 &&
-        longitude >= -180 &&
-        longitude <= 180
-    );
-}
-
-function normalizeRoomCode(value) {
-    return String(value || "")
-        .trim()
-        .toUpperCase()
-        .replace(/[^A-Z0-9_-]/g, "")
-        .slice(0, 32);
-}
-
-function normalizeDisplayName(value) {
-    return String(value || "").trim().replace(/\s+/g, " ").slice(0, 30);
-}
-
-function isValidRoomCode(roomCode) {
-    return /^[A-Z0-9_-]{3,32}$/.test(roomCode);
-}
-
-function isValidDisplayName(displayName) {
-    return displayName.length >= 2 && displayName.length <= 30;
-}
-
-function generateRoomCode() {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ123456789";
-    const bytes = new Uint8Array(8);
-
-    if (window.crypto && window.crypto.getRandomValues) {
-        window.crypto.getRandomValues(bytes);
-    } else {
-        for (let index = 0; index < bytes.length; index += 1) {
-            bytes[index] = Math.floor(Math.random() * 256);
-        }
-    }
-
-    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-}
-
-function formatDistance(meters) {
-    if (!Number.isFinite(meters)) {
-        return "";
-    }
-
-    if (meters >= 1000) {
-        return `${(meters / 1000).toFixed(2)} km`;
-    }
-
-    return `${Math.round(meters)} m`;
-}
-
-function formatDuration(seconds) {
-    if (!Number.isFinite(seconds)) {
-        return "";
-    }
-
-    const minutes = Math.round(seconds / 60);
-
-    if (minutes >= 60) {
-        const hours = Math.floor(minutes / 60);
-        const remainingMinutes = minutes % 60;
-        return `${hours} hr ${remainingMinutes} min`;
-    }
-
-    return `${minutes} min`;
-}
-
-const map = L.map("map", {
-    zoomControl: false
-}).setView([0, 0], 2);
-
-const baseLayers = {
-    "Standard": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 19,
-    }),
-    "Satellite": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-        attribution: "Tiles &copy; Esri",
-        maxZoom: 19,
-    }),
-    "Terrain": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-        attribution: "Map data &copy; OpenStreetMap contributors, SRTM | Map style &copy; OpenTopoMap",
-        maxZoom: 17,
-    }),
-    "Dark": L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-        subdomains: "abcd",
-        maxZoom: 20,
-    }),
-};
-
-baseLayers.Standard.addTo(map);
-L.control.layers(baseLayers, null, { position: "bottomleft", collapsed: true }).addTo(map);
-L.control.zoom({ position: "bottomleft" }).addTo(map);
-function locateMe() {
-    if (!currentLocation) {
-        setStatus("Waiting for your location...");
+    if (!window.L || !window.io || typeof createRouteController !== "function") {
+        setStatus("The app could not load. Check your connection and reload this page.");
         return;
     }
-
-    const center = [currentLocation.latitude, currentLocation.longitude];
-    map.invalidateSize({ pan: false });
-    map.stop();
-    map.setView(center, Math.max(map.getZoom(), 16), { animate: false });
-    map.panTo(center, { animate: false });
-    if (markers[socket.id]) {
-        markers[socket.id].openPopup();
+    function storage(area, key, value) {
+        try {
+            if (value === undefined) return window[area].getItem(key);
+            if (value === null) window[area].removeItem(key);
+            else window[area].setItem(key, value);
+        } catch { /* Persistence is optional; the active page still works. */ }
+        return null;
     }
-    setStatus("Centered on your location.");
-}
-
-const locateMeButton = document.getElementById("locate-btn");
-if (locateMeButton) locateMeButton.addEventListener("click", locateMe);
-
-function fitAllUsers() {
-    const locations = Object.values(userLocations)
-        .filter((location) => isValidCoordinate(location.latitude, location.longitude))
-        .map((location) => [location.latitude, location.longitude]);
-
-    if (locations.length === 0) {
-        setStatus("No shared locations are available yet.");
-        return;
+    const socket = io({ autoConnect: false, auth: { token: storage("sessionStorage", "pingroom-session") } });
+    const nameInput = byId("display-name");
+    const codeInput = byId("room-code");
+    const sheet = byId("sheet");
+    const sheetHandle = byId("sheet-handle");
+    const sheetChevron = byId("sheet-chevron");
+    const chatInput = byId("chat-input");
+    const chatMessages = byId("chat-messages");
+    const members = new Map();
+    const userLocations = new Map();
+    const markers = new Map();
+    const landmarks = new Map();
+    const landmarkMarkers = new Map();
+    const messages = new Map();
+    let myMemberId = null;
+    let currentRoom = null;
+    let currentDisplayName = "";
+    let joined = false;
+    let joining = false;
+    let sessionReady = false;
+    let hostId = null;
+    let roomExpiresAt = null;
+    let joinGeneration = 0;
+    let watchId = null;
+    let sharingRequested = false;
+    let currentLocation = null;
+    let publishTimer = null;
+    let lastPublishedAt = 0;
+    let landmarkMode = false;
+    let selectedDestination = null;
+    let routeLayer = null;
+    let routeUpdateTimer = null;
+    let centered = false;
+    let chatSending = false;
+    let pendingMessage = null;
+    let renderFrame = null;
+    let config = { staleLocationMs: 60000, routes: {} };
+    const configReady = fetch("/api/config").then((response) => {
+        if (!response.ok) throw new Error("Configuration unavailable");
+        return response.json();
+    }).then((value) => { config = value; }).catch(() => setStatus("Directions are unavailable. You can still use rooms and chat."));
+    const validCode = (value) => /^[A-F0-9]{16}$/.test(value.trim().toUpperCase());
+    const validName = (value) => value.trim().length >= 2 && value.length <= 30;
+    const validCoordinates = (value) => value && Number.isFinite(value.latitude) && Math.abs(value.latitude) <= 90
+        && Number.isFinite(value.longitude) && Math.abs(value.longitude) <= 180;
+    const initials = (name) => name.trim().split(/\s+/u).map((part) => Array.from(part)[0]).slice(0, 2).join("").toUpperCase();
+    const palette = ["#14B8A6", "#818CF8", "#FBBF24", "#38BDF8", "#F472B6", "#A78BFA"];
+    const colorFor = (id) => palette[Array.from(id).reduce((sum, character) => sum + character.charCodeAt(0), 0) % palette.length];
+    function element(tag, className, content) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (content !== undefined) node.textContent = content;
+        return node;
     }
-
-    if (locations.length === 1) {
-        map.setView(locations[0], Math.max(map.getZoom(), 16));
-    } else {
-        map.fitBounds(L.latLngBounds(locations), { padding: [60, 60], maxZoom: 16 });
-    }
-    setStatus(`Showing ${locations.length} room member${locations.length === 1 ? "" : "s"}.`);
-}
-
-const fitAllButton = document.getElementById("fit-all-btn");
-if (fitAllButton) fitAllButton.addEventListener("click", fitAllUsers);
-
-const landmarkButton = document.getElementById("landmark-btn");
-if (landmarkButton) {
-    landmarkButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (!currentRoom) {
-            setStatus("Join a room before adding a shared pin.");
-            return;
-        }
-
-        landmarkMode = !landmarkMode;
-        landmarkButton.classList.toggle("active", landmarkMode);
-        map.getContainer().style.cursor = landmarkMode ? "crosshair" : "";
-        setStatus(landmarkMode ? "Tap the map to place a pin." : "Pin placement cancelled.");
-    });
-}
-
-map.on("click", (event) => {
-    if (!landmarkMode) {
-        return;
-    }
-
-    if (!currentRoom) {
-        setStatus("Join a room before adding a shared pin.");
-        return;
-    }
-
-    const label = window.prompt("Landmark name (up to 50 characters):");
-    if (!label || !label.trim()) {
-        return;
-    }
-
-    socket.emit("add-landmark", {
-        latitude: event.latlng.lat,
-        longitude: event.latlng.lng,
-        label: label.trim().slice(0, 50),
-    }, (response = {}) => {
-        if (!response.ok) {
-            setStatus(response.error || "Could not add landmark.");
-            return;
-        }
-
-        addLandmarkMarker(response.landmark);
-        landmarkMode = false;
-        if (landmarkButton) landmarkButton.classList.remove("active");
-        map.getContainer().style.cursor = "";
-        setStatus(`Landmark added: ${response.landmark.label}`);
-    });
-});
-
-const markers = {};
-const markerClusterGroup = L.markerClusterGroup({
-    showCoverageOnHover: false,
-    spiderfyOnMaxZoom: true,
-    zoomToBoundsOnClick: true,
-    maxClusterRadius: 45,
-}).addTo(map);
-const landmarkMarkers = {};
-const landmarks = {};
-const landmarkLayer = L.layerGroup().addTo(map);
-const userLocations = {};
-let currentLocation = null;
-let currentRoom = null;
-let currentDisplayName = null;
-let pendingRoom = null;
-let joinTimeout = null;
-let selectedTargetId = null;
-let selectedLandmarkId = null;
-let selectedRouteMode = "driving";
-let routeLayer = null;
-let routeUpdateTimer = null;
-let hasCenteredMap = false;
-let roomControlsBusy = false;
-let landmarkMode = false;
-
-function updateJoinButtonState() {
-    const displayName = normalizeDisplayName(displayNameInput && displayNameInput.value);
-    const canUseName = isValidDisplayName(displayName);
-
-    /* Join button is enabled as long as the name is valid â“
-       the room code can be empty (server will generate one) */
-    if (joinRoomButton) {
-        joinRoomButton.disabled = roomControlsBusy || !canUseName;
-    }
-
-    if (createRoomButton) {
-        createRoomButton.disabled = roomControlsBusy || !canUseName;
-    }
-}
-
-function setRoomControlsBusy(isBusy) {
-    roomControlsBusy = isBusy;
-    updateJoinButtonState();
-}
-
-function clearJoinTimeout() {
-    if (joinTimeout) {
-        clearTimeout(joinTimeout);
-        joinTimeout = null;
-    }
-}
-
-function clearRoute() {
-    selectedTargetId = null;
-    selectedLandmarkId = null;
-
-    if (routeUpdateTimer) {
-        clearTimeout(routeUpdateTimer);
-        routeUpdateTimer = null;
-    }
-
-    if (routeLayer) {
-        map.removeLayer(routeLayer);
-        routeLayer = null;
-    }
-}
-
-function clearMarkers() {
-    Object.keys(markers).forEach((id) => {
-        markerClusterGroup.removeLayer(markers[id]);
-        delete markers[id];
-        delete userLocations[id];
-    });
-}
-
-function clearLandmarks() {
-    Object.keys(landmarkMarkers).forEach((id) => {
-        landmarkLayer.removeLayer(landmarkMarkers[id]);
-        delete landmarkMarkers[id];
-    });
-}
-
-function addLandmarkMarker(landmark) {
-    if (!isValidCoordinate(landmark.latitude, landmark.longitude) || !landmark.id) {
-        return;
-    }
-
-    landmarks[landmark.id] = landmark;
-
-    if (landmarkMarkers[landmark.id]) {
-        landmarkMarkers[landmark.id].setLatLng([landmark.latitude, landmark.longitude]);
-        return;
-    }
-
-    const marker = L.marker([landmark.latitude, landmark.longitude]);
-    const popupContent = document.createElement("div");
-    popupContent.className = "landmark-popup";
-
-    const title = document.createElement("strong");
-    title.textContent = landmark.label;
-    popupContent.appendChild(title);
-
-    const creator = document.createElement("div");
-    creator.className = "landmark-creator";
-    creator.textContent = `Added by ${landmark.creatorName || "room member"}`;
-    popupContent.appendChild(creator);
-
-    const routeControls = document.createElement("div");
-    routeControls.className = "route-controls";
-    const modeLabel = document.createElement("span");
-    modeLabel.className = "route-controls-label";
-    modeLabel.textContent = "Travel mode";
-    routeControls.appendChild(modeLabel);
-
-    const modeSelect = document.createElement("select");
-    modeSelect.className = "landmark-route-mode";
-    modeSelect.setAttribute("aria-label", "Travel mode");
-    [
-        ["driving", "Car"],
-        ["walking", "Walk"],
-        ["cycling", "Cycle"],
-    ].forEach(([value, labelText]) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = labelText;
-        option.selected = value === selectedRouteMode;
-        modeSelect.appendChild(option);
-    });
-    modeSelect.addEventListener("change", () => {
-        selectedRouteMode = modeSelect.value;
-    });
-    routeControls.appendChild(modeSelect);
-    popupContent.appendChild(routeControls);
-
-    const actionRow = document.createElement("div");
-    actionRow.className = "landmark-actions";
-    const routeButton = document.createElement("button");
-    routeButton.type = "button";
-    routeButton.className = "route-button";
-    routeButton.textContent = selectedLandmarkId === landmark.id ? "Hide route" : "Route here";
-    routeButton.addEventListener("click", () => {
-        if (selectedLandmarkId === landmark.id) {
-            clearRoute();
-            routeButton.textContent = "Route here";
-            setStatus("Route cleared.");
-            return;
-        }
-        routeToLandmark(landmark.id, modeSelect.value);
-        routeButton.textContent = "Hide route";
-    });
-    actionRow.appendChild(routeButton);
-
-    const removeButton = document.createElement("button");
-    const isCreator = landmark.creatorId === socket.id;
-    removeButton.type = "button";
-    removeButton.className = "landmark-remove-button";
-    removeButton.textContent = isCreator ? "Remove pin" : "Only creator can remove";
-    removeButton.disabled = !isCreator;
-    removeButton.title = isCreator ? "Remove this shared pin" : "Only the pin creator can remove it";
-    if (isCreator) {
-        removeButton.addEventListener("click", () => {
-            socket.emit("remove-landmark", { id: landmark.id });
+    function request(event, data, timeout = 6000) {
+        return new Promise((resolve, reject) => {
+            if (!socket.connected || !sessionReady) return reject(new Error("Not connected. Wait for reconnection and try again."));
+            socket.timeout(timeout).emit(event, data, (error, response) => {
+                if (error) reject(new Error("No delivery confirmation. Please try again."));
+                else if (!response?.ok) reject(new Error(response?.error || "The request failed."));
+                else resolve(response);
+            });
         });
-    } else {
-        removeButton.classList.add("landmark-remove-button--disabled");
     }
-    actionRow.appendChild(removeButton);
-    popupContent.appendChild(actionRow);
-
-    marker.bindPopup(popupContent);
-    landmarkMarkers[landmark.id] = marker;
-    landmarkLayer.addLayer(marker);
-}
-function resetTrackingView() {
-    clearRoute();
-    clearMarkers();
-    clearLandmarks();
-    updateUserList();
-    hasCenteredMap = false;
-    // Clear chat messages when leaving room
-    if (chatMessages) {
-        chatMessages.innerHTML = "";
-    }
-}
-
-function publishLocation() {
-    if (!currentRoom || !currentLocation) {
-        return;
+    function updateControls() {
+        const connected = socket.connected && sessionReady;
+        byId("create-room").disabled = !connected || joining || !validName(nameInput.value);
+        byId("join-room").disabled = !connected || joining || !validName(nameInput.value) || !validCode(codeInput.value);
+        nameInput.disabled = joining;
+        codeInput.disabled = joining;
+        byId("copy-room-link").disabled = !joined;
+        byId("menu-close").hidden = hostId !== myMemberId || !joined;
+        byId("share-location").disabled = !joined;
+        byId("share-location").textContent = sharingRequested ? "Pause sharing" : "Share location";
+        byId("share-location").setAttribute("aria-pressed", String(sharingRequested));
+        byId("chat-send").disabled = !joined || !connected || chatSending;
+        chatInput.disabled = !joined;
+        byId("landmark-btn").disabled = !joined || !connected;
+        byId("landmark-btn").setAttribute("aria-pressed", String(landmarkMode));
+        byId("room-pill").classList.toggle("offline", !joined || !connected);
+        const connection = !socket.connected ? "Offline · reconnecting" : !sessionReady || joining ? "Connecting…" : joined ? "Connected" : "Ready to join";
+        byId("connection-status").textContent = connection;
+        byId("sharing-status").textContent = !joined ? "Location sharing is off" : sharingRequested
+            ? currentLocation ? "Your location is sharing" : "Waiting for a location fix" : "Your location is paused";
     }
 
-    socket.emit("send-location", currentLocation);
-}
-
-function setRoomUrl(roomCode) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("room", roomCode);
-    window.history.replaceState({}, "", url.toString());
-}
-
-function getInviteLink() {
-    const url = new URL(window.location.href);
-    url.searchParams.set("room", currentRoom);
-    return url.toString();
-}
-
-async function copyInviteLink() {
-    if (!currentRoom) {
-        return;
-    }
-
-    const inviteLink = getInviteLink();
-
-    try {
-        await navigator.clipboard.writeText(inviteLink);
-        setStatus("Meeting link copied.");
-    } catch (error) {
-        console.error(error);
-        window.prompt("Copy meeting link", inviteLink);
-        setStatus("Copy the meeting link from the prompt.");
-    }
-}
-
-function getMarkerName(id) {
-    if (id === socket.id && currentDisplayName) {
-        return currentDisplayName;
-    }
-
-    return (userLocations[id] && userLocations[id].name) || "Room member";
-}
-
-/* ===== Sidebar: update the list of room members ===== */
-function updateUserList() {
-    const userList = document.getElementById("user-list");
-    if (!userList) return;
-
-    userList.innerHTML = "";
-
-    Object.keys(userLocations).forEach((id) => {
-        const li = document.createElement("li");
-        li.className = "user-item";
-        li.dataset.id = id;
-
-        const name = getMarkerName(id);
-        const isMe = id === socket.id;
-
-        // Status dot
-        const dot = document.createElement("span");
-        dot.className = "user-dot" + (isMe ? " user-dot--me" : "");
-
-        // Name text
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = isMe ? `${name} (you)` : name;
-
-        li.addEventListener("click", () => {
-            const location = userLocations[id];
-            if (!location) return;
-            map.setView([location.latitude, location.longitude], Math.max(map.getZoom(), 16));
-            if (markers[id]) markers[id].openPopup();
-        });
-
-        li.appendChild(dot);
-        li.appendChild(nameSpan);
-
-        if (isMe) {
-            li.classList.add("user-item--me");
-        }
-
-        userList.appendChild(li);
-    });
-}
-
-function updateMarkerIdentity(id, marker) {
-    const markerName = getMarkerName(id);
-    const tooltipText = id === socket.id ? `You: ${markerName}` : markerName;
-
-    if (marker.getTooltip()) {
-        marker.setTooltipContent(tooltipText);
-    } else {
-        marker.bindTooltip(tooltipText, { direction: "top" });
-    }
-
-    bindMarkerPopup(id, marker);
-}
-
-function finishRoomJoin(roomCode, displayName) {
-    const normalizedRoomCode = normalizeRoomCode(roomCode);
-    const normalizedDisplayName = normalizeDisplayName(displayName || displayNameInput.value);
-
-    if (!isValidRoomCode(normalizedRoomCode) || !isValidDisplayName(normalizedDisplayName)) {
-        return;
-    }
-
-    const roomChanged = currentRoom !== normalizedRoomCode;
-
-    clearJoinTimeout();
-    pendingRoom = null;
-    currentRoom = normalizedRoomCode;
-    currentDisplayName = normalizedDisplayName;
-    setRoomControlsBusy(false);
-
-    if (roomChanged) {
-        resetTrackingView();
-    }
-
-    if (roomCodeInput) {
-        roomCodeInput.value = currentRoom;
-    }
-
-    if (displayNameInput) {
-        displayNameInput.value = currentDisplayName;
-        localStorage.setItem("device-tracking-name", currentDisplayName);
-    }
-
-    if (copyRoomLinkButton) {
-        copyRoomLinkButton.hidden = false;
-    }
-
-    setRoomUrl(currentRoom);
-    if (roomNameElement) roomNameElement.textContent = currentRoom;
-    if (youChip) youChip.textContent = getInitials(currentDisplayName);
-    const onboardingPanel = document.getElementById("onboarding") || document.getElementById("room-panel");
-    if (onboardingPanel) onboardingPanel.classList.add("hidden");
-    publishLocation();
-    updateUserList();
-    setStatus(`${currentDisplayName} joined room ${currentRoom}.`);
-}
-
-function failRoomJoin(message) {
-    clearJoinTimeout();
-    pendingRoom = null;
-    setRoomControlsBusy(false);
-    setStatus(message || "Could not join room.");
-}
-
-function joinRoom(roomCode) {
-    const normalizedRoomCode = normalizeRoomCode(roomCode);
-    const normalizedDisplayName = normalizeDisplayName(displayNameInput && displayNameInput.value);
-
-    if (!isValidDisplayName(normalizedDisplayName)) {
-        failRoomJoin("Enter your name with 2-30 characters.");
-        return;
-    }
-
-    /* Room code validation is handled by the server â“
-       if the client sends an empty/invalid code, the server generates one */
-    if (!socket.connected) {
-        failRoomJoin("Still connecting to the server. Try again in a moment.");
-        return;
-    }
-
-    pendingRoom = normalizedRoomCode;
-    setRoomControlsBusy(true);
-    setStatus(normalizedRoomCode ? `Joining room ${normalizedRoomCode}...` : "Creating a new room...");
-
-    clearJoinTimeout();
-    joinTimeout = setTimeout(() => {
-        if (pendingRoom === normalizedRoomCode) {
-            failRoomJoin("Room join timed out. Check the server and try again.");
-        }
-    }, 7000);
-
-    socket.emit(
-        "join-room",
-        { roomCode: normalizedRoomCode, displayName: normalizedDisplayName },
-        (response = {}) => {
-            if (!response.ok) {
-                failRoomJoin(response.error || "Could not join room.");
-                return;
-            }
-
-            finishRoomJoin(response.roomCode, response.displayName);
-        }
-    );
-}
-
-function drawDirectPath(targetLocation) {
-    if (routeLayer) {
-        map.removeLayer(routeLayer);
-    }
-
-    routeLayer = L.polyline(
-        [
-            [currentLocation.latitude, currentLocation.longitude],
-            [targetLocation.latitude, targetLocation.longitude],
-        ],
-        {
-            color: "#2563eb",
-            dashArray: "8 10",
-            weight: 5,
-        }
-    ).addTo(map);
-
-    map.fitBounds(routeLayer.getBounds(), { padding: [40, 40] });
-    setStatus("Routing service unavailable. Showing direct shortest path.");
-}
-
-async function drawRouteToSelectedUser() {
-    const targetLocation = selectedTargetId ? userLocations[selectedTargetId] : landmarks[selectedLandmarkId];
-
-    if (!currentLocation) {
-        setStatus("Waiting for your location before routing.");
-        return;
-    }
-
-    if (!targetLocation) {
-        clearRoute();
-        setStatus("Selected destination is no longer available.");
-        return;
-    }
-
-    const start = `${currentLocation.longitude},${currentLocation.latitude}`;
-    const end = `${targetLocation.longitude},${targetLocation.latitude}`;
-    const routeServers = {
-        driving: "https://router.project-osrm.org/route/v1/driving",
-        walking: "https://routing.openstreetmap.de/routed-foot/route/v1/driving",
-        cycling: "https://routing.openstreetmap.de/routed-bike/route/v1/driving",
+    const map = L.map("map", { zoomControl: false }).setView([0, 0], 2);
+    const baseLayers = {
+        Standard: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noreferrer">OpenStreetMap</a> contributors' }),
+        Satellite: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri" }),
+        Terrain: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { maxZoom: 17, attribution: "&copy; OpenStreetMap, SRTM | &copy; OpenTopoMap (CC-BY-SA)" }),
+        Dark: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, subdomains: "abcd", attribution: "&copy; OpenStreetMap contributors &copy; CARTO" }),
     };
-    const routeUrl = `${routeServers[selectedRouteMode] || routeServers.driving}/${start};${end}?overview=full&geometries=geojson`;
-
-    try {
-        setStatus("Finding shortest path...");
-        const response = await fetch(routeUrl);
-
-        if (!response.ok) {
-            throw new Error("Route request failed");
+    baseLayers.Standard.addTo(map);
+    let tileErrorAt = 0;
+    Object.values(baseLayers).forEach((layer) => layer.on("tileerror", () => {
+        if (Date.now() - tileErrorAt > 30000) {
+            tileErrorAt = Date.now();
+            setStatus("Some map tiles could not load. Try a different map layer or check your connection.");
         }
+    }));
+    L.control.layers(baseLayers, null, { position: "bottomleft" }).addTo(map);
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
+    const markerGroup = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 45 }).addTo(map);
+    const landmarkLayer = L.layerGroup().addTo(map);
 
-        const result = await response.json();
-        const route = result.routes && result.routes[0];
-        const coordinates = route && route.geometry && route.geometry.coordinates;
-
-        if (!Array.isArray(coordinates) || coordinates.length === 0) {
-            throw new Error("Route not found");
-        }
-
-        const latLngs = coordinates.map(([longitude, latitude]) => [latitude, longitude]);
-
-        if (routeLayer) {
-            map.removeLayer(routeLayer);
-        }
-
-        routeLayer = L.polyline(latLngs, {
-            color: "#2563eb",
-            weight: 5,
-            opacity: 0.9,
-        }).addTo(map);
-
-        map.fitBounds(routeLayer.getBounds(), { padding: [40, 40] });
-        setStatus(
-            `Shortest path: ${formatDistance(route.distance)} - ${formatDuration(route.duration)}`
-        );
-    } catch (error) {
-        console.error(error);
-        drawDirectPath(targetLocation);
+    function mapPadding() {
+        return { paddingTopLeft: [30, 80], paddingBottomRight: [35, window.innerWidth < 900 ? Math.min(sheet.getBoundingClientRect().height + 35, window.innerHeight * 0.65) : 35], maxZoom: 17 };
     }
-}
-
-function scheduleRouteUpdate() {
-    if (!selectedTargetId && !selectedLandmarkId) {
-        return;
-    }
-
-    if (routeUpdateTimer) {
+    function clearRoute() {
+        selectedDestination = null;
         clearTimeout(routeUpdateTimer);
-    }
-
-    routeUpdateTimer = setTimeout(() => {
         routeUpdateTimer = null;
-        drawRouteToSelectedUser();
-    }, 1200);
-}
-
-function routeToUser(id, mode = "driving") {
-    selectedRouteMode = mode;
-    selectedLandmarkId = null;
-    if (id === socket.id) {
-        setStatus("That pin is your current location.");
-        return;
+        router.clear();
+        syncRouteButtons();
     }
-
-    selectedTargetId = id;
-    drawRouteToSelectedUser();
-}
-
-function routeToLandmark(id, mode = selectedRouteMode) {
-    if (!landmarks[id]) {
-        setStatus("That landmark is no longer available.");
-        return;
+    const router = createRouteController({
+        onClear() { if (routeLayer) map.removeLayer(routeLayer); routeLayer = null; },
+        onStatus: setStatus,
+        onRoute(points, info) {
+            routeLayer = L.polyline(points, { color: "#2563eb", weight: 5, opacity: 0.9, dashArray: info.direct ? "8 10" : null }).addTo(map);
+            map.fitBounds(routeLayer.getBounds(), mapPadding());
+            if (!info.direct) setStatus(`Route: ${Number.isFinite(info.distance) ? (info.distance / 1000).toFixed(2) + " km" : "distance unavailable"} · ${Number.isFinite(info.duration) ? Math.max(1, Math.round(info.duration / 60)) + " min" : "time unavailable"}`);
+        },
+    });
+    function syncRouteButtons() {
+        document.querySelectorAll("[data-route-key]").forEach((button) => {
+            button.textContent = selectedDestination?.key === button.dataset.routeKey ? "Hide route" : "Show route";
+        });
     }
-
-    selectedTargetId = null;
-    selectedLandmarkId = id;
-    selectedRouteMode = mode;
-    drawRouteToSelectedUser();
-}
-function bindMarkerPopup(id, marker) {
-    const popupContent = document.createElement("div");
-    popupContent.className = "marker-popup";
-
-    const label = document.createElement("div");
-    label.className = "marker-title";
-    label.textContent = id === socket.id ? `You (${getMarkerName(id)})` : getMarkerName(id);
-    popupContent.appendChild(label);
-
-    if (id !== socket.id) {
-        const routeControls = document.createElement("div");
-        routeControls.className = "route-controls";
-        const modeLabel = document.createElement("span");
-        modeLabel.className = "route-controls-label";
-        modeLabel.textContent = "Travel mode";
-        routeControls.appendChild(modeLabel);
-
-        const modeSelect = document.createElement("select");
-        modeSelect.className = "route-mode-select";
-        modeSelect.setAttribute("aria-label", "Travel mode");
-        [
-            ["driving", "Driving"],
-            ["walking", "Walking"],
-            ["cycling", "Cycling"],
-        ].forEach(([value, labelText]) => {
-            const option = document.createElement("option");
-            option.value = value;
-            option.textContent = labelText;
-            option.selected = value === selectedRouteMode;
-            modeSelect.appendChild(option);
+    async function drawSelectedRoute() {
+        if (!joined || !selectedDestination || !currentLocation) return;
+        const selection = selectedDestination;
+        await configReady;
+        if (selectedDestination !== selection || !joined) return;
+        const target = selection.kind === "member" ? userLocations.get(selection.id) : landmarks.get(selection.id);
+        if (!target || !validCoordinates(currentLocation)) { clearRoute(); return; }
+        const endpoint = config.routes[selection.mode];
+        if (!endpoint) { clearRoute(); setStatus("Directions are unavailable. Try again later."); return; }
+        void router.calculate({ ...currentLocation }, { ...target }, endpoint);
+    }
+    function scheduleRouteUpdate() {
+        if (!selectedDestination || routeUpdateTimer) return;
+        routeUpdateTimer = setTimeout(() => { routeUpdateTimer = null; void drawSelectedRoute(); }, 1500);
+    }
+    function routeControls(kind, id) {
+        const box = element("div", "route-controls");
+        const select = element("select", "route-mode-select");
+        select.setAttribute("aria-label", "Travel mode");
+        [["driving", "Car"], ["walking", "Walk"], ["cycling", "Cycle"]].forEach(([value, label]) => {
+            const option = element("option", "", label); option.value = value; select.append(option);
         });
-        modeSelect.addEventListener("change", () => {
-            selectedRouteMode = modeSelect.value;
-        });
-        routeControls.appendChild(modeSelect);
-        popupContent.appendChild(routeControls);
-
-        const button = document.createElement("button");
+        const key = `${kind}:${id}`;
+        if (selectedDestination?.key === key) select.value = selectedDestination.mode;
+        const button = element("button", "route-button", selectedDestination?.key === key ? "Hide route" : "Show route");
         button.type = "button";
-        button.className = "route-button";
-        button.textContent = selectedTargetId === id ? "Hide route" : "Show route";
+        button.dataset.routeKey = key;
         button.addEventListener("click", () => {
-            if (selectedTargetId === id) {
-                clearRoute();
-                button.textContent = "Show route";
-                setStatus("Route cleared.");
-                return;
-            }
-            routeToUser(id, modeSelect.value);
-            button.textContent = "Hide route";
+            if (selectedDestination?.key === key) { clearRoute(); setStatus("Route cleared."); return; }
+            if (!currentLocation || !sharingRequested) { setStatus("Share your location to use it as the route start."); return; }
+            clearRoute();
+            selectedDestination = { key, kind, id, mode: select.value };
+            syncRouteButtons();
+            void drawSelectedRoute();
         });
-        popupContent.appendChild(button);
+        select.addEventListener("change", () => {
+            if (selectedDestination?.key === key) { selectedDestination.mode = select.value; void drawSelectedRoute(); }
+        });
+        box.append(select, button);
+        return box;
     }
-
-    marker.bindPopup(popupContent);
-}
-
-if (displayNameInput) {
-    displayNameInput.value = localStorage.getItem("device-tracking-name") || "";
-    displayNameInput.addEventListener("input", () => {
-        const normalizedDisplayName = normalizeDisplayName(displayNameInput.value);
-
-        if (displayNameInput.value.length > 30) {
-            displayNameInput.value = normalizedDisplayName;
+    function memberPopup(id) {
+        const member = members.get(id);
+        const box = element("div", "marker-popup");
+        box.append(element("strong", "marker-title", `${member?.name || "Member"}${id === myMemberId ? " (you)" : ""}`));
+        const position = userLocations.get(id);
+        if (position) box.append(element("span", "landmark-creator", `Reported accuracy ±${Math.round(position.accuracy)} m`));
+        if (id !== myMemberId) box.append(routeControls("member", id));
+        return box;
+    }
+    function synchronizeMarker(member) {
+        const position = member.location;
+        const usable = member.connected && validCoordinates(position) && Date.now() - position.receivedAt <= config.staleLocationMs;
+        if (!usable) {
+            userLocations.delete(member.id);
+            if (markers.has(member.id)) { markerGroup.removeLayer(markers.get(member.id)); markers.delete(member.id); }
+            if (selectedDestination?.kind === "member" && selectedDestination.id === member.id) clearRoute();
+            return;
         }
-
-        updateJoinButtonState();
-    });
-}
-
-if (roomCodeInput) {
-    roomCodeInput.addEventListener("input", () => {
-        const normalizedRoomCode = normalizeRoomCode(roomCodeInput.value);
-
-        if (roomCodeInput.value !== normalizedRoomCode) {
-            roomCodeInput.value = normalizedRoomCode;
+        const previous = userLocations.get(member.id);
+        const moved = !previous || previous.latitude !== position.latitude || previous.longitude !== position.longitude;
+        userLocations.set(member.id, { ...position, name: member.name });
+        let marker = markers.get(member.id);
+        const tooltip = element("span", "", `${member.name}${member.id === myMemberId ? " (you)" : ""}`);
+        if (marker) { marker.setLatLng([position.latitude, position.longitude]); marker.setTooltipContent(tooltip); }
+        else {
+            marker = L.marker([position.latitude, position.longitude], { title: member.name, alt: `Location of ${member.name}` });
+            marker.bindTooltip(tooltip, { direction: "top" });
+            marker.bindPopup(memberPopup(member.id));
+            marker.on("popupopen", () => marker.setPopupContent(memberPopup(member.id)));
+            markers.set(member.id, marker);
+            markerGroup.addLayer(marker);
         }
-
-        updateJoinButtonState();
+        if (!centered && member.id === myMemberId) { map.setView([position.latitude, position.longitude], 16); centered = true; }
+        if (moved && selectedDestination && (selectedDestination.id === member.id || member.id === myMemberId)) scheduleRouteUpdate();
+    }
+    function addLandmarkMarker(pin) {
+        if (!pin || !validCoordinates(pin) || typeof pin.id !== "string") return;
+        landmarks.set(pin.id, pin);
+        if (landmarkMarkers.has(pin.id)) landmarkLayer.removeLayer(landmarkMarkers.get(pin.id));
+        const box = element("div", "landmark-popup");
+        box.append(element("strong", "", pin.label), element("div", "landmark-creator", `Added by ${pin.creatorName}`), routeControls("landmark", pin.id));
+        const remove = element("button", "landmark-remove-button", pin.creatorId === myMemberId ? "Remove pin" : "Only creator can remove");
+        remove.type = "button";
+        remove.disabled = pin.creatorId !== myMemberId;
+        remove.addEventListener("click", async () => {
+            remove.disabled = true;
+            try { await request("remove-landmark", { id: pin.id }); }
+            catch (error) { remove.disabled = false; setStatus(error.message); }
+        });
+        box.append(remove);
+        const marker = L.marker([pin.latitude, pin.longitude], { title: `Pin: ${pin.label}`, alt: `Shared pin: ${pin.label}` }).bindPopup(box);
+        landmarkMarkers.set(pin.id, marker);
+        landmarkLayer.addLayer(marker);
+    }
+    function removeLandmark(id) {
+        if (landmarkMarkers.has(id)) landmarkLayer.removeLayer(landmarkMarkers.get(id));
+        landmarkMarkers.delete(id); landmarks.delete(id);
+        if (selectedDestination?.kind === "landmark" && selectedDestination.id === id) clearRoute();
+    }
+    function clearTrackingView() {
+        clearRoute(); markerGroup.clearLayers(); landmarkLayer.clearLayers();
+        members.clear(); userLocations.clear(); markers.clear(); landmarks.clear(); landmarkMarkers.clear(); messages.clear();
+        chatMessages.replaceChildren(); centered = false;
+    }
+    function centerMember(id) {
+        const position = userLocations.get(id);
+        if (!position) { setStatus("This member is not sharing a current location."); return; }
+        const marker = markers.get(id);
+        map.setView([position.latitude, position.longitude], 17);
+        if (marker) markerGroup.zoomToShowLayer(marker, () => marker.openPopup());
+        if (window.innerWidth < 900) setSheetExpanded(false);
+    }
+    function presence(member) {
+        if (!member.connected) return "Disconnected · waiting to reconnect";
+        if (!member.sharing) return "Location paused";
+        if (!member.location) return "Location unavailable or stale";
+        const age = Math.max(0, Math.floor((Date.now() - member.location.receivedAt) / 1000));
+        return `Updated ${age < 5 ? "just now" : `${age}s ago`} · ±${Math.round(member.location.accuracy)} m`;
+    }
+    function renderMembers() {
+        renderFrame = null;
+        const focusedId = document.activeElement?.dataset.memberId;
+        const list = byId("user-list");
+        const avatars = byId("avatar-row");
+        list.replaceChildren(); avatars.replaceChildren();
+        for (const member of members.values()) {
+            const row = element("li", "user-item" + (member.id === myMemberId ? " user-item--me" : ""));
+            const button = element("button", "member-button"); button.type = "button"; button.dataset.memberId = member.id;
+            const dot = element("span", "user-dot" + (member.id === myMemberId ? " user-dot--me" : ""));
+            dot.classList.toggle("paused", !member.connected || !member.location);
+            dot.setAttribute("aria-hidden", "true");
+            const copy = element("span", "member-copy");
+            copy.append(element("span", "member-name", `${member.name}${member.id === myMemberId ? " (you)" : ""}`), element("span", "member-presence", presence(member)));
+            button.append(dot, copy); button.addEventListener("click", () => centerMember(member.id)); row.append(button); list.append(row);
+            const avatar = element("button", "avatar-chip" + (member.id === myMemberId ? " me" : ""), initials(member.name));
+            avatar.type = "button"; avatar.style.setProperty("--c", colorFor(member.id));
+            avatar.setAttribute("aria-label", `${member.name}: ${presence(member)}`); avatar.title = member.name;
+            avatar.addEventListener("click", () => centerMember(member.id)); avatars.append(avatar);
+        }
+        if (!members.size) list.append(element("li", "empty-state", "Join a room to see its members."));
+        byId("member-count").textContent = String(members.size);
+        if (focusedId) [...list.querySelectorAll("button")].find((button) => button.dataset.memberId === focusedId)?.focus({ preventScroll: true });
+        updateControls(); scheduleLayout();
+    }
+    function scheduleMembers() { if (!renderFrame) renderFrame = requestAnimationFrame(renderMembers); }
+    function appendMessage(item) {
+        if (!item || messages.has(item.messageId)) return;
+        messages.set(item.messageId, item);
+        const row = element("div", `chat-message ${item.id === myMemberId ? "own" : "other"}`);
+        row.style.setProperty("--sender-color", colorFor(item.id));
+        if (item.id !== myMemberId) row.append(element("div", "chat-sender-name", item.name));
+        row.append(element("div", "chat-message-bubble", item.message));
+        chatMessages.append(row);
+        while (messages.size > 100) { messages.delete(messages.keys().next().value); chatMessages.firstElementChild?.remove(); }
+        byId("chat-empty").hidden = messages.size > 0;
+        const panel = byId("panel-chat");
+        requestAnimationFrame(() => { panel.scrollTop = panel.scrollHeight; });
+    }
+    function applySnapshot(state) {
+        if (!joined || state.roomCode !== currentRoom) return;
+        hostId = state.hostId; roomExpiresAt = state.expiresAt;
+        const nextIds = new Set(state.members.map((member) => member.id));
+        for (const id of members.keys()) if (!nextIds.has(id)) {
+            members.delete(id); userLocations.delete(id);
+            if (markers.has(id)) markerGroup.removeLayer(markers.get(id)); markers.delete(id);
+            if (selectedDestination?.kind === "member" && selectedDestination.id === id) clearRoute();
+        }
+        for (const member of state.members) { members.set(member.id, member); synchronizeMarker(member); }
+        const pinIds = new Set(state.landmarks.map((pin) => pin.id));
+        for (const id of landmarks.keys()) if (!pinIds.has(id)) removeLandmark(id);
+        for (const pin of state.landmarks) if (!landmarks.has(pin.id)) addLandmarkMarker(pin);
+        for (const item of state.messages) appendMessage(item);
+        scheduleMembers();
+    }
+    function setMenu(open, focus = false) {
+        byId("you-menu").hidden = !open;
+        byId("you-menu").classList.toggle("open", open);
+        byId("you-chip").setAttribute("aria-expanded", String(open));
+        if (open && focus) byId("copy-room-link").focus();
+    }
+    byId("you-chip").addEventListener("click", () => setMenu(byId("you-menu").hidden, true));
+    document.addEventListener("click", (event) => { if (!event.target.closest(".profile-menu")) setMenu(false); });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            if (!byId("you-menu").hidden) { setMenu(false); byId("you-chip").focus(); }
+            if (landmarkMode) toggleLandmarkMode(false);
+        }
+        if (event.key === "Tab" && !onboarding.hidden) {
+            const focusables = [...onboarding.querySelectorAll("input:not(:disabled),button:not(:disabled),a[href]")].filter((node) => node.getClientRects().length);
+            const first = focusables[0], last = focusables.at(-1);
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
     });
-}
-
-let createButtonSuppressed = false;
-let chatInput = null;
-let chatForm = null;
-let chatMessages = null;
-
-if (roomForm) {
-    roomForm.addEventListener("submit", (event) => {
-        event.preventDefault();
-        createButtonSuppressed = true;
-        joinRoom(roomCodeInput.value);
-        setTimeout(() => { createButtonSuppressed = false; }, 100);
-    });
-
-    /* Catch Enter key directly â“ prevents browsers from firing
-       the createRoomButton click when the Join button is disabled */
-    roomForm.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
+    byId("you-menu").addEventListener("keydown", (event) => {
+        if (event.key === "Tab") { setMenu(false); byId("you-chip").focus(); return; }
+        const items = [...byId("you-menu").querySelectorAll("button:not([hidden]):not(:disabled)")];
+        const index = items.indexOf(document.activeElement);
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
             event.preventDefault();
-            createButtonSuppressed = true;
-            joinRoom(roomCodeInput.value);
-            setTimeout(() => { createButtonSuppressed = false; }, 100);
+            const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+            items[next]?.focus();
         }
     });
-}
 
-if (createRoomButton) {
-    createRoomButton.addEventListener("click", () => {
-        /* Prevent the Create button from firing when the user pressed Enter
-           in the form â“ some browsers trigger type="button" on Enter */
-        if (createButtonSuppressed) return;
-
-        const inputValue = roomCodeInput?.value ?? '';
-        const normalized = normalizeRoomCode(inputValue);
-        let roomCode;
-        if (isValidRoomCode(normalized)) {
-            roomCode = normalized;
-        } else {
-            roomCode = generateRoomCode();
+    async function joinRoom(action = "join") {
+        if (joining) return;
+        const displayName = action === "resume" ? currentDisplayName : nameInput.value.trim().replace(/\s+/gu, " ");
+        const roomCode = action === "resume" ? currentRoom : codeInput.value.trim().toUpperCase();
+        if (!validName(displayName) || (action !== "create" && !validCode(roomCode))) {
+            setStatus("Enter your name and a complete 16-character room code."); return;
         }
-        roomCodeInput.value = roomCode;
-        updateJoinButtonState();
-        joinRoom(roomCode);
+        const version = ++joinGeneration;
+        joining = true; updateControls();
+        try {
+            const response = await request("join-room", { action, roomCode, displayName });
+            if (version !== joinGeneration || !socket.connected) return;
+            currentRoom = response.snapshot.roomCode; currentDisplayName = displayName;
+            myMemberId = response.memberId; joined = true;
+            clearTrackingView(); applySnapshot(response.snapshot);
+            storage("localStorage", "device-tracking-name", displayName);
+            byId("room-name").textContent = currentRoom;
+            byId("you-chip").textContent = initials(displayName);
+            codeInput.value = currentRoom;
+            const url = new URL(location.href); url.searchParams.set("room", currentRoom); history.replaceState(null, "", url);
+            onboarding.hidden = true; onboarding.inert = true; byId("app-shell").inert = false;
+            setMenu(false); byId("you-chip").focus({ preventScroll: true });
+            if (action !== "resume") sharingRequested = byId("share-on-join").checked;
+            if (sharingRequested) startWatching();
+            setStatus(action === "resume" ? "Reconnected. Room state is up to date." : `Joined room ${currentRoom}.`);
+            scheduleLayout();
+        } catch (error) {
+            if (version !== joinGeneration) return;
+            if (action === "resume") leaveView();
+            setStatus(error.message);
+        } finally { if (version === joinGeneration) { joining = false; updateControls(); } }
+    }
+    function stopWatching() {
+        if (watchId !== null) navigator.geolocation?.clearWatch(watchId);
+        watchId = null; clearTimeout(publishTimer); publishTimer = null;
+        currentLocation = null; lastPublishedAt = 0;
+    }
+    function publishLocation() {
+        publishTimer = null;
+        if (!joined || !socket.connected || !sessionReady || !sharingRequested || !currentLocation
+            || Date.now() - currentLocation.timestamp > config.staleLocationMs) return;
+        const delay = 3000 - (Date.now() - lastPublishedAt);
+        if (delay > 0) { publishTimer = setTimeout(publishLocation, delay); return; }
+        lastPublishedAt = Date.now();
+        socket.volatile.emit("send-location", { ...currentLocation });
+    }
+    function startWatching() {
+        stopWatching();
+        if (!joined || !socket.connected || !sharingRequested) return;
+        if (!window.isSecureContext || !navigator.geolocation) {
+            sharingRequested = false; updateControls();
+            setStatus(!window.isSecureContext ? "Location needs HTTPS. Open this site over HTTPS; plain LAN HTTP cannot share location." : "Geolocation is unavailable in this browser.");
+            return;
+        }
+        watchId = navigator.geolocation.watchPosition((position) => {
+            if (!sharingRequested || !joined) return;
+            const { latitude, longitude, accuracy } = position.coords;
+            if (!validCoordinates({ latitude, longitude }) || !Number.isFinite(accuracy)) return;
+            currentLocation = { latitude, longitude, accuracy, timestamp: position.timestamp };
+            if (!publishTimer) publishLocation();
+            updateControls();
+        }, (error) => {
+            currentLocation = null;
+            if (error.code === 1) { sharingRequested = false; stopWatching(); }
+            if (joined && socket.connected) void request("pause-location", {}).catch(() => {});
+            clearRoute(); updateControls();
+            setStatus(error.code === 1 ? "Location permission denied. Enable it in browser settings, then select Share location." : error.code === 3 ? "Location timed out. Check GPS or move somewhere with a clearer signal." : "Location is unavailable. Check your device location settings.");
+        }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 5000 });
+        updateControls();
+    }
+    byId("share-location").addEventListener("click", async () => {
+        if (!joined) return;
+        if (sharingRequested) {
+            sharingRequested = false; stopWatching(); clearRoute(); updateControls();
+            if (socket.connected) try { await request("pause-location", {}); setStatus("Location sharing paused."); } catch (error) { setStatus(error.message); }
+        } else if (socket.connected) { sharingRequested = true; startWatching(); }
+        else setStatus("Wait for reconnection before sharing.");
     });
-}
-
-if (copyRoomLinkButton) {
-    copyRoomLinkButton.addEventListener("click", copyInviteLink);
-}
-
-if (menuLeaveButton) {
-    menuLeaveButton.addEventListener("click", () => {
-        socket.disconnect();
-        window.location.href = window.location.pathname;
+    function leaveView() {
+        ++joinGeneration; joining = false; joined = false; currentRoom = null; sharingRequested = false;
+        stopWatching(); clearTrackingView(); hostId = null; roomExpiresAt = null;
+        pendingMessage = null; chatSending = false; chatInput.value = "";
+        byId("room-name").textContent = "No room";
+        byId("you-chip").textContent = "?";
+        onboarding.hidden = false; onboarding.inert = false; byId("app-shell").inert = true;
+        setMenu(false); nameInput.disabled = false; codeInput.disabled = false;
+        const url = new URL(location.href); url.searchParams.delete("room"); history.replaceState(null, "", url);
+        renderMembers(); nameInput.focus();
+    }
+    byId("menu-leave").addEventListener("click", async () => {
+        if (!socket.connected) { socket.disconnect(); leaveView(); socket.connect(); return; }
+        try { await request("leave-room", {}); leaveView(); setStatus("You left the room."); }
+        catch (error) { setStatus(error.message); }
     });
-}
-
-// Initialize chat elements
-chatInput = document.getElementById("chat-input");
-chatForm = document.getElementById("chat-form");
-chatMessages = document.getElementById("chat-messages");
-
-if (chatForm && chatInput) {
-    chatForm.addEventListener("submit", (event) => {
+    byId("menu-close").addEventListener("click", async () => {
+        if (!window.confirm("Close this room for everyone and delete its positions, pins, and chat?")) return;
+        try { await request("close-room", {}); }
+        catch (error) { setStatus(error.message); }
+    });
+    byId("copy-room-link").addEventListener("click", async () => {
+        if (!joined) return;
+        const url = new URL("/app", location.href); url.searchParams.set("room", currentRoom);
+        try { await navigator.clipboard.writeText(url.href); setStatus("Meeting link copied."); }
+        catch { window.prompt("Copy meeting link", url.href); }
+        setMenu(false);
+    });
+    byId("room-form").addEventListener("submit", (event) => { event.preventDefault(); void joinRoom("join"); });
+    byId("create-room").addEventListener("click", () => void joinRoom("create"));
+    nameInput.addEventListener("input", updateControls);
+    codeInput.addEventListener("input", updateControls);
+    byId("chat-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const message = chatInput.value.trim();
-        if (!message) {
-            return;
+        if (!message || chatSending || !joined) return;
+        if (!pendingMessage || pendingMessage.message !== message || pendingMessage.roomCode !== currentRoom) {
+            const messageId = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+            pendingMessage = { messageId, message, roomCode: currentRoom };
         }
-
-        if (!currentRoom) {
-            setStatus("Join a room before sending a message.");
-            return;
-        }
-
-        if (!socket.connected) {
-            setStatus("Chat is reconnecting to the server.");
-            return;
-        }
-
-        socket.emit("chat-message", { message });
-        chatInput.value = "";
+        const attempt = pendingMessage;
+        chatSending = true; byId("chat-feedback").textContent = "Sending…"; updateControls();
+        try {
+            const response = await request("chat-message", { messageId: attempt.messageId, message: attempt.message });
+            if (currentRoom !== attempt.roomCode) return;
+            appendMessage(response.message);
+            if (chatInput.value.trim() === attempt.message) chatInput.value = "";
+            pendingMessage = null; byId("chat-feedback").textContent = "Delivered";
+        } catch (error) {
+            if (currentRoom === attempt.roomCode) byId("chat-feedback").textContent = `${error.message} Your draft is kept; send again to retry.`;
+        } finally { chatSending = false; updateControls(); }
     });
-}
 
-document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-        const target = tab.dataset.tab;
-        document.querySelectorAll(".tab").forEach((item) => {
-            item.classList.toggle("active", item === tab);
+    function setSheetExpanded(expanded) {
+        sheet.dataset.state = expanded ? "expanded" : "peek";
+        sheetChevron.setAttribute("aria-expanded", String(expanded));
+        sheetChevron.setAttribute("aria-label", expanded ? "Collapse panel" : "Expand panel");
+        byId("sheet-body").inert = window.innerWidth < 900 && !expanded;
+        scheduleLayout();
+    }
+    sheetChevron.addEventListener("click", () => setSheetExpanded(sheet.dataset.state !== "expanded"));
+    const tabs = [...document.querySelectorAll(".tab")];
+    function selectTab(tab, focus = false) {
+        tabs.forEach((item) => {
+            const active = item === tab;
+            item.classList.toggle("active", active); item.setAttribute("aria-selected", String(active)); item.tabIndex = active ? 0 : -1;
+            byId(item.getAttribute("aria-controls")).hidden = !active;
         });
-
-        const membersPanel = document.getElementById("panel-members");
-        const chatPanel = document.getElementById("panel-chat");
-        if (membersPanel) membersPanel.classList.toggle("hidden", target !== "members");
-        if (chatPanel) chatPanel.classList.toggle("hidden", target !== "chat");
-
-        if (target === "chat") {
-            const sheet = document.getElementById("sheet");
-            if (sheet) sheet.setAttribute("data-state", "expanded");
-            if (chatInput) chatInput.focus();
-        }
+        setSheetExpanded(true);
+        if (focus) tab.focus();
+    }
+    tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => selectTab(tab));
+        tab.addEventListener("keydown", (event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+            selectTab(tabs[next], true);
+        });
     });
-});
-
-if (navigator.geolocation) {
-    navigator.geolocation.watchPosition(
-        (position) => {
-            const { latitude, longitude } = position.coords;
-
-            if (!isValidCoordinate(latitude, longitude)) {
-                setStatus("Ignoring invalid location update.");
-                return;
-            }
-
-            currentLocation = { latitude, longitude };
-
-            if (currentRoom) {
-                publishLocation();
-
-                if (selectedTargetId) {
-                    scheduleRouteUpdate();
-                } else {
-                    setStatus(`Sharing location in room ${currentRoom}.`);
-                }
-            } else if (!pendingRoom) {
-                setStatus("Enter your name, then create or join a room.");
-            }
-        },
-        (error) => {
-            console.error(error);
-            setStatus(`Location error: ${error.message}`);
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0,
-        }
-    );
-} else {
-    setStatus("Geolocation is not supported by this browser");
-}
-
-socket.on("room-joined", (data = {}) => {
-    finishRoomJoin(data.roomCode, data.displayName);
-});
-
-socket.on("room-error", (data = {}) => {
-    failRoomJoin(data.error || "Could not join room.");
-});
-
-socket.on("receive-landmark", (landmark) => {
-    addLandmarkMarker(landmark);
-});
-
-socket.on("landmark-removed", (id) => {
-    if (landmarkMarkers[id]) {
-        landmarkLayer.removeLayer(landmarkMarkers[id]);
-        delete landmarkMarkers[id];
+    let drag = null;
+    sheetHandle.addEventListener("pointerdown", (event) => {
+        if (window.innerWidth >= 900 || event.target.closest("button") || !event.isPrimary) return;
+        drag = { y: event.clientY, expanded: sheet.dataset.state === "expanded", delta: 0 };
+        sheetHandle.setPointerCapture(event.pointerId);
+    });
+    sheetHandle.addEventListener("pointermove", (event) => {
+        if (!drag) return;
+        drag.delta = event.clientY - drag.y;
+        const matrix = drag.expanded ? 0 : Math.max(0, sheet.offsetHeight - Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sheet-peek")));
+        sheet.style.transition = "none";
+        sheet.style.transform = `translateY(${Math.max(0, Math.min(sheet.offsetHeight - 44, matrix + drag.delta))}px)`;
+    });
+    function endDrag(event, cancel = false) {
+        if (!drag) return;
+        const expanded = cancel || Math.abs(drag.delta) < 35 ? drag.expanded : drag.delta < 0;
+        drag = null; sheet.style.transition = ""; sheet.style.transform = "";
+        if (sheetHandle.hasPointerCapture(event.pointerId)) sheetHandle.releasePointerCapture(event.pointerId);
+        setSheetExpanded(expanded);
     }
-
-    delete landmarks[id];
-    if (selectedLandmarkId === id) {
-        clearRoute();
-        setStatus("Selected landmark was removed.");
+    sheetHandle.addEventListener("pointerup", (event) => endDrag(event));
+    sheetHandle.addEventListener("pointercancel", (event) => endDrag(event, true));
+    sheetHandle.addEventListener("lostpointercapture", (event) => endDrag(event, true));
+    let layoutFrame = null;
+    function scheduleLayout() {
+        if (layoutFrame) return;
+        layoutFrame = requestAnimationFrame(() => {
+            layoutFrame = null;
+            const desktop = window.innerWidth >= 900;
+            const header = sheet.querySelector(".sheet-peek");
+            const handleHeight = desktop ? 0 : sheetHandle.offsetHeight;
+            const peek = Math.min(sheet.offsetHeight, header.offsetHeight + handleHeight + 8);
+            document.documentElement.style.setProperty("--sheet-peek", `${peek}px`);
+            document.documentElement.style.setProperty("--sheet-visual", `${desktop ? 0 : sheet.dataset.state === "expanded" ? sheet.offsetHeight : peek}px`);
+            byId("sheet-body").inert = !desktop && sheet.dataset.state !== "expanded";
+            map.invalidateSize({ pan: false });
+        });
     }
-});
-socket.on("receive-location", (data) => {
-    const { id, latitude, longitude } = data;
-    const name = normalizeDisplayName(data.name) || "Room member";
-
-    if (!isValidCoordinate(latitude, longitude)) {
-        return;
+    new ResizeObserver(scheduleLayout).observe(sheet);
+    new ResizeObserver(scheduleLayout).observe(sheet.querySelector(".sheet-peek"));
+    window.addEventListener("resize", scheduleLayout);
+    window.visualViewport?.addEventListener("resize", scheduleLayout);
+    byId("locate-btn").addEventListener("click", () => {
+        if (!currentLocation) { setStatus("Select Share location and wait for a location fix."); return; }
+        map.invalidateSize(); map.stop(); map.setView([currentLocation.latitude, currentLocation.longitude], 17, { animate: false });
+        if (window.innerWidth < 900) setSheetExpanded(false);
+        const marker = markers.get(myMemberId);
+        if (marker) markerGroup.zoomToShowLayer(marker, () => marker.openPopup());
+    });
+    byId("fit-all-btn").addEventListener("click", () => {
+        const positions = [...userLocations.values()].map((position) => [position.latitude, position.longitude]);
+        if (!positions.length) { setStatus("No current locations are being shared."); return; }
+        map.fitBounds(L.latLngBounds(positions), mapPadding());
+    });
+    function toggleLandmarkMode(active) {
+        landmarkMode = active; byId("landmark-btn").classList.toggle("active", active);
+        byId("landmark-btn").setAttribute("aria-pressed", String(active));
+        map.getContainer().style.cursor = active ? "crosshair" : "";
     }
+    byId("landmark-btn").addEventListener("click", () => {
+        toggleLandmarkMode(!landmarkMode);
+        setStatus(landmarkMode ? "Tap the map to add a named pin. Press Escape to cancel." : "Pin placement cancelled.");
+        if (landmarkMode && window.innerWidth < 900) setSheetExpanded(false);
+    });
+    map.on("click", async (event) => {
+        if (!landmarkMode || !joined) return;
+        const label = window.prompt("Pin name (1–50 characters)");
+        if (!label?.trim()) { toggleLandmarkMode(false); return; }
+        toggleLandmarkMode(false);
+        try { await request("add-landmark", { latitude: event.latlng.lat, longitude: event.latlng.lng, label: label.trim() }); setStatus("Shared pin added."); }
+        catch (error) { setStatus(error.message); }
+    });
 
-    userLocations[id] = { latitude, longitude, name };
-
-    if (!hasCenteredMap && id === socket.id) {
-        map.setView([latitude, longitude], 16);
-        hasCenteredMap = true;
+    socket.on("session", (data) => {
+        myMemberId = data.memberId; socket.auth = { token: data.token };
+        storage("sessionStorage", "pingroom-session", data.token); sessionReady = true; updateControls();
+        if (currentRoom) void joinRoom("resume");
+    });
+    socket.on("connect", updateControls);
+    socket.on("disconnect", () => {
+        ++joinGeneration; joining = false; sessionReady = false; joined = false;
+        stopWatching(); clearTrackingView(); toggleLandmarkMode(false); renderMembers();
+        setStatus("Disconnected. Positions are hidden until the room resynchronizes.");
+    });
+    socket.on("connect_error", () => { sessionReady = false; updateControls(); setStatus("Cannot connect to the server. Check your connection; the app will retry."); });
+    socket.on("session-replaced", () => { currentRoom = null; leaveView(); setStatus("This session opened in another connection. Join again to continue."); });
+    socket.on("server-restarting", () => setStatus("The server is restarting. Rooms may need to be recreated."));
+    socket.on("room-state", (state) => applySnapshot(state));
+    socket.on("receive-location", (data) => {
+        if (!joined || data.roomCode !== currentRoom) return;
+        members.set(data.member.id, data.member); synchronizeMarker(data.member); scheduleMembers();
+    });
+    socket.on("receive-landmark", (data) => { if (joined && data.roomCode === currentRoom) addLandmarkMarker(data.landmark); });
+    socket.on("landmark-removed", (data) => { if (joined && data.roomCode === currentRoom) removeLandmark(data.id); });
+    socket.on("chat-message", (data) => { if (joined && data.roomCode === currentRoom) appendMessage(data.message); });
+    socket.on("room-closed", (data) => { if (data.roomCode === currentRoom) { leaveView(); setStatus(data.reason); } });
+    window.addEventListener("pagehide", () => { stopWatching(); socket.disconnect(); });
+    window.addEventListener("pageshow", (event) => { if (event.persisted) socket.connect(); });
+    setInterval(() => {
+        if (!joined) return;
+        for (const member of members.values()) synchronizeMarker(member);
+        if (currentLocation && Date.now() - currentLocation.timestamp > config.staleLocationMs) { currentLocation = null; clearRoute(); }
+        byId("room-expiry").textContent = `Expires in ${Math.max(0, Math.ceil((roomExpiresAt - Date.now()) / 60000))} min`;
+        scheduleMembers();
+    }, 10000);
+    nameInput.value = storage("localStorage", "device-tracking-name") || "";
+    const invitedRoom = new URLSearchParams(location.search).get("room");
+    if (invitedRoom) {
+        codeInput.value = invitedRoom;
+        feedback.textContent = validCode(invitedRoom) ? "Check your name and choose Join. Location sharing is optional." : "This invite has an invalid room code. Ask for a new link.";
     }
-
-    if (markers[id]) {
-        markers[id].setLatLng([latitude, longitude]);
-        markerClusterGroup.refreshClusters(markers[id]);
-        updateMarkerIdentity(id, markers[id]);
-    } else {
-        markers[id] = L.marker([latitude, longitude]);
-        markerClusterGroup.addLayer(markers[id]);
-        updateMarkerIdentity(id, markers[id]);
-    }
-
-    updateUserList();
-
-    if (id === selectedTargetId || id === socket.id) {
-        scheduleRouteUpdate();
-    }
-});
-
-socket.on("user-disconnected", (id) => {
-    delete userLocations[id];
-
-    if (markers[id]) {
-        markerClusterGroup.removeLayer(markers[id]);
-        delete markers[id];
-    }
-
-    updateUserList();
-
-    if (id === selectedTargetId) {
-        clearRoute();
-        setStatus("Selected user disconnected.");
-    }
-});
-
-socket.on("chat-message", (data) => {
-    const messageElement = document.createElement("div");
-    messageElement.classList.add("chat-message");
-    const senderPalette = ["#14B8A6", "#818CF8", "#FBBF24", "#38BDF8", "#F472B6", "#A78BFA"];
-    const senderKey = String(data.id || data.name || "member");
-    const senderHash = Array.from(senderKey).reduce((total, character) => total + character.charCodeAt(0), 0);
-    messageElement.style.setProperty("--sender-color", senderPalette[senderHash % senderPalette.length]);
-
-    // Determine if this message is from the current user
-    const isOwnMessage = data.id === socket.id;
-
-    if (isOwnMessage) {
-        messageElement.classList.add("own");
-    } else {
-        messageElement.classList.add("other");
-    }
-
-    // Add sender name for other users' messages
-    if (!isOwnMessage) {
-        const senderName = document.createElement("div");
-        senderName.classList.add("chat-sender-name");
-        senderName.textContent = data.name;
-        senderName.title = `Message from ${data.name}`;
-        messageElement.appendChild(senderName);
-    }
-
-    // Create message bubble
-    const messageBubble = document.createElement("div");
-    messageBubble.classList.add("chat-message-bubble");
-    messageBubble.textContent = data.message;
-
-    messageElement.appendChild(messageBubble);
-
-    chatMessages.appendChild(messageElement);
-    // Scroll to bottom
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-});
-
-socket.on("connect", () => {
-    setRoomControlsBusy(false);
-
-    if (currentRoom) {
-        joinRoom(currentRoom);
-    } else {
-        setStatus("Connected. Enter your name, then create or join a room.");
-    }
-});
-
-socket.on("disconnect", () => {
-    clearJoinTimeout();
-    pendingRoom = null;
-    setRoomControlsBusy(false);
-    setStatus("Disconnected from tracking server");
-});
-
-const roomFromUrl = normalizeRoomCode(new URLSearchParams(window.location.search).get("room"));
-
-if (roomFromUrl) {
-    roomCodeInput.value = roomFromUrl;
-    updateJoinButtonState();
-
-    if (isValidDisplayName(normalizeDisplayName(displayNameInput.value))) {
-        if (socket.connected) {
-            joinRoom(roomFromUrl);
-        } else {
-            socket.once("connect", () => joinRoom(roomFromUrl));
-        }
-    } else {
-        setStatus(`Enter your name to join room ${roomFromUrl}.`);
-    }
-} else {
-    updateJoinButtonState();
-}
+    if (!window.isSecureContext) byId("secure-context-notice").hidden = false;
+    setSheetExpanded(false); renderMembers(); updateControls(); socket.connect();
+})();
