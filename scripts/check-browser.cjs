@@ -21,6 +21,10 @@ async function poll(check, description) {
 async function prepare(context, { blockStorage = false, roomName = "Reviewer" } = {}) {
     const page = await context.newPage();
     const errors = [];
+    const tileRequests = [];
+    page.on("request", (request) => {
+        if (request.url().startsWith("https://tile.openstreetmap.org/")) tileRequests.push(request);
+    });
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => { if (message.type() === "error" && /Content Security Policy|violates.*directive/i.test(message.text())) errors.push(message.text()); });
     await page.addInitScript(({ blocked, name }) => {
@@ -38,7 +42,7 @@ async function prepare(context, { blockStorage = false, roomName = "Reviewer" } 
     }, { blocked: blockStorage, name: roomName });
     // Keep layout tests independent of tile-provider connectivity. App JS/CSS are real local assets.
     await page.route(/https:\/\/.*(?:tile\.openstreetmap|arcgisonline|tile\.opentopomap|basemaps\.cartocdn).*/, (route) => route.fulfill({ status: 200, contentType: "image/png", body: transparentTile }));
-    return { page, errors };
+    return { page, errors, tileRequests };
 }
 async function assertLayout(page, state, size) {
     await page.waitForTimeout(100);
@@ -89,13 +93,20 @@ async function audit(page, name) {
     try {
         browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined });
         const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-        const { page, errors } = await prepare(context); activePage = page;
-        await page.goto(url + "/app");
+        const { page, errors, tileRequests } = await prepare(context); activePage = page;
+        await page.goto(url + "/app?room=0123456789ABCDEF");
         await page.waitForFunction(() => document.getElementById("connection-status").textContent === "Ready to join");
         assert.equal(await page.evaluate(() => window.testWatches), 0, "GPS must not start on page load");
+        await poll(() => tileRequests.length > 0, "OpenStreetMap tile requests");
+        for (const request of tileRequests) {
+            const headers = await request.allHeaders();
+            assert.equal(headers.referer, url + "/", "Tiles identify only the site origin, without the room code or page path");
+            assert.equal(new URL(request.url()).hostname, "tile.openstreetmap.org", "Use the canonical OSM tile endpoint");
+        }
         await audit(page, "onboarding");
         for (const size of sizes) { await page.setViewportSize(size); await assertLayout(page, "onboarding", size); }
         await page.setViewportSize({ width: 1280, height: 900 });
+        await page.locator("#room-code").fill("");
         await page.locator("#display-name").fill("Reviewer");
         assert.equal(await page.locator("#join-room").isDisabled(), true, "Join requires a complete code");
         await page.locator("#create-room").click();

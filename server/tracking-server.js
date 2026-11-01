@@ -90,11 +90,13 @@ function createTrackingServer(options = {}) {
     app.set("view engine", "ejs");
     app.set("views", path.join(__dirname, "..", "views"));
     app.use(helmet({
+        // Browser tile providers require identification; cross-origin requests get only the origin, never invite query strings.
+        referrerPolicy: { policy: "strict-origin-when-cross-origin" },
         strictTransportSecurity: process.env.NODE_ENV === "production" ? undefined : false,
         contentSecurityPolicy: { directives: {
             defaultSrc: ["'self'"], scriptSrc: ["'self'"], scriptSrcAttr: ["'none'"],
             styleSrc: ["'self'", "'unsafe-inline'"], fontSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org", "https://server.arcgisonline.com",
+            imgSrc: ["'self'", "data:", "https://tile.openstreetmap.org", "https://server.arcgisonline.com",
                 "https://*.tile.opentopomap.org", "https://*.basemaps.cartocdn.com"],
             connectSrc: ["'self'", ...new Set(Object.values(routes).map((url) => new URL(url).origin))],
             frameAncestors: ["'none'"], objectSrc: ["'none'"], baseUri: ["'none'"],

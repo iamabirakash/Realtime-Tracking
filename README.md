@@ -39,6 +39,7 @@ The layout uses a collapsible bottom sheet below 900px and a docked sidebar abov
 - The last display name is remembered in localStorage. A random member credential is stored in sessionStorage for the tab; blocked storage falls back to in-memory operation. Anonymous server session records expire after 3 hours of inactivity after disconnection.
 - Map tile requests go directly to OpenStreetMap, Esri, OpenTopoMap, or CARTO. Requested routes send start/destination coordinates to the selected routing provider. The app does not upload coordinates to a routing provider until a route is requested.
 - The map libraries are served locally; an external JavaScript CDN is not needed. Map tiles and directions still require provider availability. A failed route is labelled a **straight-line estimate, not a travel route**.
+- Standard map tiles use OpenStreetMap's canonical endpoint and send the site's origin as the browser Referer, as required by its [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). Room codes and page query strings are not sent in cross-origin referrers. A proxy or browser extension that strips Referer can still cause the provider to block requests.
 - Restarting the server clears room data. If a restart loses a room, clients must create a new one; the app does not silently recreate an expired invite.
 
 ## Limits and security

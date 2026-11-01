@@ -37,6 +37,8 @@ test("pages, security headers, local map assets, config, and manifest icons", as
         assert.equal(response.status, 200, path);
         assert.match(response.headers.get("content-security-policy"), /script-src 'self'/);
         assert.equal(response.headers.get("x-powered-by"), null);
+        assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+        assert.match(response.headers.get("content-security-policy"), /https:\/\/tile\.openstreetmap\.org/);
         assert.match(response.headers.get("permissions-policy"), /geolocation=\(self\)/);
     }
     const manifest = await (await fetch(app.url + "/images/site.webmanifest")).json();
